@@ -261,3 +261,37 @@ create policy "shared_accounts_update_owner" on public.shared_accounts
   for update using (auth.uid() = owner_id);
 
 -- service_role bypassa RLS automaticamente (use no backend)
+
+
+-- Adicionar coluna role na tabela profiles
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS role text NOT NULL DEFAULT 'padrao';
+
+-- Atualizar funcao handle_new_user para incluir o role
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  INSERT INTO public.profiles (
+    id,
+    name,
+    email,
+    subscription_status,
+    trial_started_at,
+    subscription_expires_at,
+    role
+  )
+  VALUES (
+    new.id,
+    COALESCE(new.raw_user_meta_data->>'name', split_part(new.email, '@', 1)),
+    new.email,
+    'trial',
+    NOW(),
+    NOW() + interval '1 year',
+    COALESCE(new.raw_user_meta_data->>'role', 'padrao')
+  );
+  RETURN new;
+END;
+$$;
