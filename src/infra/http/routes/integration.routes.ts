@@ -7,13 +7,40 @@ const integrationRoutes = Router();
 const integrationController = new IntegrationController();
 
 // Sincronização Manual (Protegida)
-integrationRoutes.get('/pluggy/token', ensureAuthenticated, checkLicensing, integrationController.getPluggyToken);
-integrationRoutes.post('/pluggy/sync', ensureAuthenticated, checkLicensing, integrationController.syncPluggyAccount);
-integrationRoutes.post('/b3/update-prices', ensureAuthenticated, checkLicensing, integrationController.updateMarketPrices);
-integrationRoutes.post('/whatsapp/daily-summary', ensureAuthenticated, checkLicensing, integrationController.sendDailySummary);
-integrationRoutes.patch('/notifications/preferences', ensureAuthenticated, checkLicensing, integrationController.updateNotificationPrefs);
+integrationRoutes.get(
+  '/pluggy/token',
+  ensureAuthenticated,
+  checkLicensing,
+  (req, res) => integrationController.getPluggyToken(req, res)
+);
+integrationRoutes.post(
+  '/pluggy/sync',
+  ensureAuthenticated,
+  checkLicensing,
+  (req, res) => integrationController.syncPluggyAccount(req, res)
+);
+integrationRoutes.post(
+  '/b3/update-prices',
+  ensureAuthenticated,
+  checkLicensing,
+  (req, res) => integrationController.updateMarketPrices(req, res)
+);
+integrationRoutes.post(
+  '/whatsapp/daily-summary',
+  ensureAuthenticated,
+  checkLicensing,
+  (req, res) => integrationController.sendDailySummary(req, res)
+);
+integrationRoutes.patch(
+  '/notifications/preferences',
+  ensureAuthenticated,
+  checkLicensing,
+  (req, res) => integrationController.updateNotificationPrefs(req, res)
+);
 
 // Webhooks (Públicos - Validados por Provedor)
-integrationRoutes.post('/webhook/whatsapp', integrationController.whatsappWebhook);
+integrationRoutes.post('/webhook/whatsapp', (req, res) =>
+  integrationController.whatsappWebhook(req, res)
+);
 
 export { integrationRoutes };

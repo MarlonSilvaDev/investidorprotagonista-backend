@@ -2,13 +2,20 @@ import { Request, Response } from 'express';
 import { supabase } from '../../database/supabase';
 import Stripe from 'stripe';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
-  apiVersion: '2024-04-10' as any,
-});
+function getStripe() {
+  const apiKey = process.env.STRIPE_SECRET_KEY;
+  if (!apiKey) {
+    throw new Error('STRIPE_SECRET_KEY não configurada no .env');
+  }
+  return new Stripe(apiKey, {
+    apiVersion: '2024-04-10' as any,
+  });
+}
 
 export class PaymentController {
   // ─── STRIPE (Web, Windows, Mac) ───
   async createCheckoutSession(request: Request, response: Response) {
+    const stripe = getStripe();
     const { id: userId } = request.user;
     const { priceId } = request.body;
 
@@ -71,6 +78,7 @@ export class PaymentController {
 
   // ─── WEBHOOK STRIPE ───
   async stripeWebhook(request: Request, response: Response) {
+    const stripe = getStripe();
     const sig = request.headers['stripe-signature'] as string;
     let event;
 
