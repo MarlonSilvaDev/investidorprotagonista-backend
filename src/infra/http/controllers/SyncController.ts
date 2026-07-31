@@ -7,7 +7,8 @@ type SyncEntity =
   | 'task'
   | 'card'
   | 'subscription'
-  | 'investment';
+  | 'investment'
+  | 'category';
 
 type SyncOp = 'upsert' | 'delete';
 
@@ -26,6 +27,7 @@ const TABLE_BY_ENTITY: Record<SyncEntity, string> = {
   card: 'cards',
   subscription: 'subscriptions',
   investment: 'investments',
+  category: 'categories',
 };
 
 function toIso(value: unknown): string | null {
@@ -160,6 +162,24 @@ function mapInvestmentRow(
   };
 }
 
+function mapCategoryRow(
+  userId: string,
+  clientId: string,
+  payload: Record<string, unknown>
+) {
+  return {
+    id: clientId,
+    user_id: userId,
+    name: payload.name,
+    type: payload.type,
+    icon: payload.icon ?? null,
+    color: payload.color ?? null,
+    is_default: Boolean(payload.isDefault ?? payload.is_default ?? false),
+    source: payload.source ?? 'transaction',
+    updated_at: toIso(payload.updatedAt ?? payload.updated_at) ?? new Date().toISOString(),
+  };
+}
+
 function mapRow(
   entity: SyncEntity,
   userId: string,
@@ -179,6 +199,8 @@ function mapRow(
       return mapSubscriptionRow(userId, clientId, payload);
     case 'investment':
       return mapInvestmentRow(userId, clientId, payload);
+    case 'category':
+      return mapCategoryRow(userId, clientId, payload);
   }
 }
 
@@ -210,9 +232,14 @@ export class SyncController {
 
       try {
         if (op === 'delete') {
+          // SOFT DELETE: usa deleted_at ao invés de DELETE físico
+          // Conforme a arquitetura de escalabilidade
           const { error } = await supabase
             .from(table)
-            .delete()
+            .update({
+              deleted_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
             .match({ id: clientId, user_id: userId });
 
           if (error) {
@@ -282,6 +309,7 @@ export class SyncController {
 
     const entities: SyncEntity[] = [
       'transaction',
+      'category',
       'goal',
       'task',
       'card',
@@ -293,7 +321,13 @@ export class SyncController {
 
     for (const entity of entities) {
       const table = TABLE_BY_ENTITY[entity];
-      let query = supabase.from(table).select('*').eq('user_id', userId);
+      let query = supabase
+        .from(table)
+        .select('*')
+        .eq('user_id', userId);
+
+      // Filtra apenas registros ativos (deleted_at IS NULL)
+      query = query.is('deleted_at', null);
 
       if (since) {
         query = query.gt('updated_at', since.toISOString());
@@ -308,9 +342,30 @@ export class SyncController {
       changes[`${entity}s`] = data ?? [];
     }
 
+    // Retorna também as exclusões (deleted_at != NULL) para o app remover do Drift
+    const deletions: Record<string, unknown[]> = {};
+    for (const entity of entities) {
+      const table = TABLE_BY_ENTITY[entity];
+      let query = supabase
+        .from(table)
+        .select('id')
+        .eq('user_id', userId)
+        .not('deleted_at', 'is', null);
+
+      if (since) {
+        query = query.gt('updated_at', since.toISOString());
+      }
+
+      const { data } = await query;
+      if (data && data.length > 0) {
+        deletions[`${entity}s`] = data;
+      }
+    }
+
     return response.json({
       server_time: new Date().toISOString(),
       changes,
+      deletions: Object.keys(deletions).length > 0 ? deletions : undefined,
     });
   }
 }

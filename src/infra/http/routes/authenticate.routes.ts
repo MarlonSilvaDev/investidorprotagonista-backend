@@ -59,6 +59,9 @@ authenticateRoutes.post('/login', decryptAuthCredentials, (req, res) =>
 authenticateRoutes.post('/register', decryptAuthCredentials, (req, res) =>
   authenticateController.register(req, res)
 );
+authenticateRoutes.post('/verify-sms', decryptAuthCredentials, (req, res) =>
+  authenticateController.verifySms(req, res)
+);
 authenticateRoutes.post('/forgot-password', decryptAuthCredentials, (req, res) =>
   authenticateController.forgotPassword(req, res)
 );

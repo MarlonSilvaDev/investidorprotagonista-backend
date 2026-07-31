@@ -62,12 +62,17 @@ export class AuthenticateController {
       .toLowerCase();
     const password = String(request.body.password || '');
     const name = String(request.body.name || '').trim();
+    const phone = String(request.body.phone || '').trim();
+    const nickname = String(request.body.nickname || '').trim();
 
     if (!isValidEmail(email)) {
       return response.status(400).json({ message: 'E-mail inválido' });
     }
     if (!name) {
       return response.status(400).json({ message: 'Nome é obrigatório' });
+    }
+    if (!phone) {
+      return response.status(400).json({ message: 'Celular é obrigatório' });
     }
     const passwordError = validatePassword(password);
     if (passwordError) {
@@ -80,7 +85,7 @@ export class AuthenticateController {
       email,
       password,
       email_confirm: true,
-      user_metadata: { name },
+      user_metadata: { name, phone, nickname },
     });
 
     if (error || !data.user) {
@@ -89,39 +94,92 @@ export class AuthenticateController {
       });
     }
 
-    // Garante flag false (trigger já cria assim; reforço idempotente).
+    // Garante flag false e atualiza nickname/phone no profile
     await supabaseAdmin
       .from('profiles')
-      .update({ email_registrado: false, name, email })
+      .update({ 
+        email_registrado: false, 
+        name, 
+        email, 
+        phone_number: phone, 
+        nickname 
+      })
       .eq('id', data.user.id);
 
-    const locale = resolveLocale(request.body.locale);
-
-    const token = signAuthMailToken({
-      sub: data.user.id,
+    // Gera código SMS (OTP)
+    const smsCode = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    // Salva no banco para validação posterior
+    await supabaseAdmin.from('sms_verifications').insert({
       email,
-      type: 'email_confirm',
+      phone,
+      code: smsCode,
     });
-    const confirmUrl = `${backendUrl()}/auth/confirm-email?token=${encodeURIComponent(token)}`;
 
-    try {
-      await sendConfirmationEmail({ to: email, name, confirmUrl, locale });
-    } catch (mailError) {
-      console.error('[auth/register] falha ao enviar e-mail', mailError);
-      return response.status(500).json({
-        message:
-          'Conta criada, mas falhou o envio do e-mail de confirmação. Tente reenviar.',
-        user_id: data.user.id,
-      });
-    }
+    console.log(`[SMS MOCK] Enviando código ${smsCode} para ${phone}`);
+    // Aqui seria a integração com um serviço real de SMS (Twilio, AWS SNS, etc.)
 
     return response.status(201).json({
       id: data.user.id,
       email,
-      requires_email_confirmation: true,
+      requires_email_confirmation: false,
+      requires_sms_verification: true,
       provider_type: 'email',
-      message:
-        'Cadastro realizado. Enviamos um e-mail para você confirmar a conta.',
+      message: 'Cadastro realizado. Enviamos um código por SMS para você confirmar a conta.',
+    });
+  }
+
+  async verifySms(request: Request, response: Response) {
+    const email = String(request.body.email || '').trim().toLowerCase();
+    const code = String(request.body.code || '').trim();
+
+    if (!email || !code) {
+      return response.status(400).json({ message: 'E-mail e código são obrigatórios' });
+    }
+
+    // Busca o código mais recente não expirado
+    const { data: verification, error } = await supabaseAdmin
+      .from('sms_verifications')
+      .select('*')
+      .eq('email', email)
+      .eq('code', code)
+      .eq('verified', false)
+      .gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error || !verification) {
+      return response.status(400).json({ message: 'Código inválido ou expirado' });
+    }
+
+    // Marca como verificado
+    await supabaseAdmin
+      .from('sms_verifications')
+      .update({ verified: true })
+      .eq('id', verification.id);
+
+    // Busca o perfil do usuário
+    const profile = await getProfileByEmail(email);
+    if (!profile) {
+      return response.status(404).json({ message: 'Usuário não encontrado' });
+    }
+
+    // Ativa a conta
+    await supabaseAdmin
+      .from('profiles')
+      .update({ email_registrado: true })
+      .eq('id', profile.id);
+
+    return response.json({
+      message: 'Celular validado com sucesso! Agora você pode entrar na sua conta.',
+      user: {
+        id: profile.id,
+        email: profile.email,
+        name: profile.name,
+      },
+      // O front deve redirecionar para o login após esta mensagem
+      requires_login: true
     });
   }
 

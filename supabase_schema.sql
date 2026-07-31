@@ -13,6 +13,7 @@ create table if not exists public.profiles (
   name text,
   email text,
   phone_number text,
+  nickname text,
   avatar_url text,
   plan text not null default 'free',
   subscription_status text not null default 'trial', -- trial | active | canceled | expired
@@ -47,7 +48,9 @@ begin
     trial_started_at,
     subscription_expires_at,
     email_registrado,
-    provider_type
+    provider_type,
+    phone_number,
+    nickname
   )
   values (
     new.id,
@@ -57,7 +60,9 @@ begin
     now(),
     now() + interval '1 year',
     false,
-    coalesce(new.raw_user_meta_data->>'provider', 'email')
+    coalesce(new.raw_user_meta_data->>'provider', 'email'),
+    new.raw_user_meta_data->>'phone',
+    new.raw_user_meta_data->>'nickname'
   );
   return new;
 end;
@@ -315,3 +320,18 @@ BEGIN
   RETURN new;
 END;
 $$;
+
+-- ═══════════════════════════════════════════
+-- SMS VERIFICATIONS
+-- ═══════════════════════════════════════════
+create table if not exists public.sms_verifications (
+  id uuid primary key default gen_random_uuid(),
+  email text not null,
+  phone text not null,
+  code text not null,
+  verified boolean not null default false,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null default (now() + interval '10 minutes')
+);
+
+create index if not exists idx_sms_verifications_email on public.sms_verifications (email);

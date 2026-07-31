@@ -11,6 +11,7 @@ import { integrationRoutes } from './integration.routes';
 import { dashboardRoutes } from './dashboard.routes';
 import { syncRoutes } from './sync.routes';
 import { analyticsRoutes } from './analytics.routes';
+import { categoryRoutes } from './category.routes';
 import { ensureAuthenticated } from '../middlewares/ensureAuthenticated';
 import { checkLicensing } from '../middlewares/checkLicensing';
 
@@ -33,5 +34,6 @@ routes.use('/goals', ensureAuthenticated, checkLicensing, goalRoutes);
 routes.use('/tasks', ensureAuthenticated, checkLicensing, taskRoutes);
 routes.use('/cards', ensureAuthenticated, checkLicensing, cardRoutes);
 routes.use('/subscriptions', ensureAuthenticated, checkLicensing, subscriptionRoutes);
+routes.use('/categories', ensureAuthenticated, checkLicensing, categoryRoutes);
 
 export { routes };

@@ -81,3 +81,65 @@ CREATE INDEX IF NOT EXISTS idx_profiles_email ON public.profiles (email);
 CREATE INDEX IF NOT EXISTS idx_profiles_email_registrado
   ON public.profiles (email_registrado)
   WHERE email_registrado = false;
+
+-- ═══════════════════════════════════════════
+-- profiles.nickname
+-- profiles.phone_number (already exists, but ensuring meta-data sync)
+-- ═══════════════════════════════════════════
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS nickname text;
+
+COMMENT ON COLUMN public.profiles.nickname IS 'Nickname do usuário para exibição no app';
+
+-- Atualiza o trigger de novo usuário para gravar nickname e phone_number
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  INSERT INTO public.profiles (
+    id,
+    name,
+    email,
+    subscription_status,
+    trial_started_at,
+    subscription_expires_at,
+    role,
+    email_registrado,
+    provider_type,
+    phone_number,
+    nickname
+  )
+  VALUES (
+    new.id,
+    COALESCE(new.raw_user_meta_data->>'name', split_part(new.email, '@', 1)),
+    new.email,
+    'trial',
+    NOW(),
+    NOW() + interval '1 year',
+    COALESCE(new.raw_user_meta_data->>'role', 'padrao'),
+    false,
+    COALESCE(new.raw_user_meta_data->>'provider', 'email'),
+    new.raw_user_meta_data->>'phone',
+    new.raw_user_meta_data->>'nickname'
+  );
+  RETURN new;
+END;
+$$;
+
+-- ═══════════════════════════════════════════
+-- SMS VERIFICATIONS
+-- ═══════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS public.sms_verifications (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  email text NOT NULL,
+  phone text NOT NULL,
+  code text NOT NULL,
+  verified boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  expires_at timestamptz NOT NULL DEFAULT (now() + interval '10 minutes')
+);
+
+CREATE INDEX IF NOT EXISTS idx_sms_verifications_email ON public.sms_verifications (email);
