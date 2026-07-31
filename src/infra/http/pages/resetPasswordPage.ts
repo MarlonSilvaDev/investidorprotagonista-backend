@@ -1,10 +1,72 @@
+import { type AppLocale, resolveLocale } from '../../../core/utils/i18n';
+
 type ResetPasswordPageOptions = {
   token: string;
   errorMessage?: string;
   success?: boolean;
   loginUrl: string;
   appName?: string;
+  locale?: AppLocale;
 };
+
+function textsFor(locale: AppLocale) {
+  switch (locale) {
+    case 'en':
+      return {
+        lang: 'en-US',
+        title: 'New password',
+        titleSuccess: 'Password updated',
+        message: 'Set a strong password for your account.',
+        messageSuccess: 'Your password has been reset successfully.',
+        labelPassword: 'New password',
+        labelConfirm: 'Confirm password',
+        ruleLen: '• Minimum 8 characters',
+        ruleUpper: '• 1 uppercase letter',
+        ruleNum: '• 1 number',
+        ruleSpecial: '• 1 special character (@ # $ *)',
+        btnSubmit: 'Save new password',
+        btnGoLogin: 'Go to login',
+        alertInvalid: 'The password does not meet the requirements.',
+        alertMismatch: 'The passwords do not match.',
+      };
+    case 'es':
+      return {
+        lang: 'es',
+        title: 'Nueva contraseña',
+        titleSuccess: 'Contraseña actualizada',
+        message: 'Define una contraseña segura para tu cuenta.',
+        messageSuccess: 'Tu contraseña fue restablecida con éxito.',
+        labelPassword: 'Nueva contraseña',
+        labelConfirm: 'Confirmar contraseña',
+        ruleLen: '• Mínimo 8 caracteres',
+        ruleUpper: '• 1 letra mayúscula',
+        ruleNum: '• 1 número',
+        ruleSpecial: '• 1 carácter especial (@ # $ *)',
+        btnSubmit: 'Guardar nueva contraseña',
+        btnGoLogin: 'Ir al inicio de sesión',
+        alertInvalid: 'La contraseña no cumple los requisitos.',
+        alertMismatch: 'Las contraseñas no coinciden.',
+      };
+    default:
+      return {
+        lang: 'pt-BR',
+        title: 'Nova senha',
+        titleSuccess: 'Senha atualizada',
+        message: 'Defina uma senha forte para sua conta.',
+        messageSuccess: 'Sua senha foi redefinida com sucesso.',
+        labelPassword: 'Nova senha',
+        labelConfirm: 'Confirmar senha',
+        ruleLen: '• Mínimo 8 caracteres',
+        ruleUpper: '• 1 letra maiúscula',
+        ruleNum: '• 1 número',
+        ruleSpecial: '• 1 especial (@ # $ *)',
+        btnSubmit: 'Salvar nova senha',
+        btnGoLogin: 'Ir para o login',
+        alertInvalid: 'A senha não atende aos requisitos.',
+        alertMismatch: 'As senhas não coincidem.',
+      };
+  }
+}
 
 export function renderResetPasswordPage({
   token,
@@ -12,29 +74,31 @@ export function renderResetPasswordPage({
   success,
   loginUrl,
   appName = 'Investidor Protagonista',
+  locale = 'pt',
 }: ResetPasswordPageOptions): string {
   const safeToken = token.replace(/"/g, '&quot;');
   const safeLogin = loginUrl.replace(/"/g, '&quot;');
+  const t = textsFor(resolveLocale(locale));
 
   if (success) {
     return `<!DOCTYPE html>
-<html lang="pt-BR"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Senha alterada — ${appName}</title>
+<html lang="${t.lang}"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>${t.titleSuccess} — ${appName}</title>
 <style>
 body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0B0E14;color:#fff;font-family:Segoe UI,Roboto,sans-serif;padding:24px}
 .card{max-width:440px;width:100%;background:#151923;border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:32px;text-align:center}
 a{display:inline-block;margin-top:24px;background:#2ED9A0;color:#0B0E14;text-decoration:none;font-weight:700;padding:14px 18px;border-radius:12px;width:100%;box-sizing:border-box}
 p{color:#9CA3AF;line-height:1.5}
 </style></head>
-<body><div class="card"><h1>Senha atualizada</h1><p>Sua senha foi redefinida com sucesso.</p><a href="${safeLogin}">Ir para o login</a></div></body></html>`;
+<body><div class="card"><h1>${t.titleSuccess}</h1><p>${t.messageSuccess}</p><a href="${safeLogin}">${t.btnGoLogin}</a></div></body></html>`;
   }
 
   return `<!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="${t.lang}">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Nova senha — ${appName}</title>
+  <title>${t.title} — ${appName}</title>
   <style>
     body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0B0E14;color:#fff;font-family:Segoe UI,Roboto,sans-serif;padding:24px}
     .card{max-width:440px;width:100%;background:#151923;border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:32px 28px}
@@ -50,21 +114,21 @@ p{color:#9CA3AF;line-height:1.5}
 </head>
 <body>
   <form class="card" method="POST" action="/auth/reset-password" id="form">
-    <h1>Criar nova senha</h1>
-    <p>Defina uma senha forte para sua conta.</p>
+    <h1>${t.title}</h1>
+    <p>${t.message}</p>
     ${errorMessage ? `<div class="err">${errorMessage}</div>` : ''}
     <input type="hidden" name="token" value="${safeToken}" />
-    <label for="password">Nova senha</label>
+    <label for="password">${t.labelPassword}</label>
     <input id="password" name="password" type="password" required minlength="8" autocomplete="new-password" />
-    <label for="confirm">Confirmar senha</label>
+    <label for="confirm">${t.labelConfirm}</label>
     <input id="confirm" name="confirm" type="password" required minlength="8" autocomplete="new-password" />
     <div class="rules" id="rules">
-      <div data-rule="len">• Mínimo 8 caracteres</div>
-      <div data-rule="upper">• 1 letra maiúscula</div>
-      <div data-rule="num">• 1 número</div>
-      <div data-rule="special">• 1 especial (@ # $ *)</div>
+      <div data-rule="len">${t.ruleLen}</div>
+      <div data-rule="upper">${t.ruleUpper}</div>
+      <div data-rule="num">${t.ruleNum}</div>
+      <div data-rule="special">${t.ruleSpecial}</div>
     </div>
-    <button type="submit">Salvar nova senha</button>
+    <button type="submit">${t.btnSubmit}</button>
   </form>
   <script>
     var pwd = document.getElementById('password');
@@ -87,8 +151,8 @@ p{color:#9CA3AF;line-height:1.5}
     form.addEventListener('submit', function (e) {
       var v = pwd.value || '';
       var ok = v.length >= 8 && /[A-Z]/.test(v) && /\\d/.test(v) && /[@#$*]/.test(v);
-      if (!ok) { e.preventDefault(); alert('A senha não atende aos requisitos.'); return; }
-      if (v !== confirm.value) { e.preventDefault(); alert('As senhas não coincidem.'); }
+      if (!ok) { e.preventDefault(); alert('${t.alertInvalid.replace(/'/g, "\\'")}'); return; }
+      if (v !== confirm.value) { e.preventDefault(); alert('${t.alertMismatch.replace(/'/g, "\\'")}'); }
     });
     paint();
   </script>

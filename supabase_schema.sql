@@ -25,6 +25,8 @@ create table if not exists public.profiles (
   whatsapp_session_state text default 'idle',
   -- Confirmado pelo link do nosso backend (SMTP próprio), não pelo e-mail do Supabase
   email_registrado boolean not null default false,
+  -- Tipo de provedor: 'email' (login/senha) ou 'google' (Google Sign-In)
+  provider_type text not null default 'email',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -44,7 +46,8 @@ begin
     subscription_status,
     trial_started_at,
     subscription_expires_at,
-    email_registrado
+    email_registrado,
+    provider_type
   )
   values (
     new.id,
@@ -53,7 +56,8 @@ begin
     'trial',
     now(),
     now() + interval '1 year',
-    false
+    false,
+    coalesce(new.raw_user_meta_data->>'provider', 'email')
   );
   return new;
 end;
@@ -274,7 +278,11 @@ ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS role text NOT NULL DEFAULT 
 ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS email_registrado boolean NOT NULL DEFAULT false;
 
--- Atualizar funcao handle_new_user para incluir role + email_registrado
+-- Tipo de provedor: 'email' (login/senha) ou 'google' (Google Sign-In)
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS provider_type text NOT NULL DEFAULT 'email';
+
+-- Atualizar funcao handle_new_user para incluir role + email_registrado + provider_type
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -290,7 +298,8 @@ BEGIN
     trial_started_at,
     subscription_expires_at,
     role,
-    email_registrado
+    email_registrado,
+    provider_type
   )
   VALUES (
     new.id,
@@ -300,7 +309,8 @@ BEGIN
     NOW(),
     NOW() + interval '1 year',
     COALESCE(new.raw_user_meta_data->>'role', 'padrao'),
-    false
+    false,
+    COALESCE(new.raw_user_meta_data->>'provider', 'email')
   );
   RETURN new;
 END;

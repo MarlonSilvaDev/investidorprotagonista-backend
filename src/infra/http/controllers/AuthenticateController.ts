@@ -9,6 +9,7 @@ import {
   sendConfirmationEmail,
   sendPasswordResetEmail,
 } from '../../../core/utils/MailService';
+import { resolveLocale } from '../../../core/utils/i18n';
 import { renderEmailConfirmedPage } from '../pages/emailConfirmedPage';
 import { renderEmailLinkErrorPage } from '../pages/emailLinkErrorPage';
 import { renderResetPasswordPage } from '../pages/resetPasswordPage';
@@ -31,7 +32,7 @@ function frontendLoginUrl(): string {
 async function getProfileByUserId(userId: string) {
   const { data, error } = await supabaseAdmin
     .from('profiles')
-    .select('id, email, name, email_registrado')
+    .select('id, email, name, email_registrado, provider_type')
     .eq('id', userId)
     .maybeSingle();
 
@@ -44,7 +45,7 @@ async function getProfileByUserId(userId: string) {
 async function getProfileByEmail(email: string) {
   const { data, error } = await supabaseAdmin
     .from('profiles')
-    .select('id, email, name, email_registrado')
+    .select('id, email, name, email_registrado, provider_type')
     .eq('email', email)
     .maybeSingle();
 
@@ -94,6 +95,8 @@ export class AuthenticateController {
       .update({ email_registrado: false, name, email })
       .eq('id', data.user.id);
 
+    const locale = resolveLocale(request.body.locale);
+
     const token = signAuthMailToken({
       sub: data.user.id,
       email,
@@ -102,7 +105,7 @@ export class AuthenticateController {
     const confirmUrl = `${backendUrl()}/auth/confirm-email?token=${encodeURIComponent(token)}`;
 
     try {
-      await sendConfirmationEmail({ to: email, name, confirmUrl });
+      await sendConfirmationEmail({ to: email, name, confirmUrl, locale });
     } catch (mailError) {
       console.error('[auth/register] falha ao enviar e-mail', mailError);
       return response.status(500).json({
@@ -116,6 +119,7 @@ export class AuthenticateController {
       id: data.user.id,
       email,
       requires_email_confirmation: true,
+      provider_type: 'email',
       message:
         'Cadastro realizado. Enviamos um e-mail para você confirmar a conta.',
     });
@@ -144,13 +148,14 @@ export class AuthenticateController {
       return response
         .status(200)
         .type('html')
-        .send(renderEmailConfirmedPage({ loginUrl: frontendLoginUrl() }));
+        .send(renderEmailConfirmedPage({ loginUrl: frontendLoginUrl(), locale: request.query.locale as any }));
     } catch {
       return response.status(400).type('html').send(
         renderEmailLinkErrorPage({
           loginUrl: frontendLoginUrl(),
           description:
             'O link de confirmação é inválido ou já expirou. Solicite um novo e-mail pelo app.',
+          locale: request.query.locale as any,
         })
       );
     }
@@ -192,6 +197,7 @@ export class AuthenticateController {
       user: data.user,
       token: data.session?.access_token,
       refresh_token: data.session?.refresh_token,
+      provider_type: profile?.provider_type ?? 'email',
     });
   }
 
@@ -215,6 +221,21 @@ export class AuthenticateController {
       return response.json(generic);
     }
 
+    // Bloqueia recuperação de senha para contas Google
+    if (profile.provider_type === 'google') {
+      const locale = resolveLocale(request.body.locale);
+      const messages: Record<string, string> = {
+        en: 'Password recovery is not available for accounts registered with Google. Please log in using Google Sign-In.',
+        es: 'La recuperación de contraseña no está disponible para cuentas registradas con Google. Por favor, inicia sesión usando Google Sign-In.',
+      };
+      return response.json({
+        message: messages[locale] ?? 'Recuperação de senha não disponível para contas cadastradas pelo Google. Faça login utilizando o Google Sign-In.',
+        provider_type: 'google',
+      });
+    }
+
+    const locale = resolveLocale(request.body.locale);
+
     const token = signAuthMailToken(
       {
         sub: profile.id,
@@ -223,13 +244,14 @@ export class AuthenticateController {
       },
       '1h'
     );
-    const resetUrl = `${backendUrl()}/auth/reset-password?token=${encodeURIComponent(token)}`;
+    const resetUrl = `${backendUrl()}/auth/reset-password?token=${encodeURIComponent(token)}&locale=${encodeURIComponent(locale)}`;
 
     try {
       await sendPasswordResetEmail({
         to: email,
         name: profile.name ?? undefined,
         resetUrl,
+        locale,
       });
     } catch (mailError) {
       console.error('[auth/forgot-password] falha ao enviar e-mail', mailError);
@@ -252,6 +274,7 @@ export class AuthenticateController {
         renderResetPasswordPage({
           token,
           loginUrl: frontendLoginUrl(),
+          locale: request.query.locale as any,
         })
       );
     } catch {
@@ -260,6 +283,7 @@ export class AuthenticateController {
           loginUrl: frontendLoginUrl(),
           description:
             'O link de redefinição de senha é inválido ou já expirou.',
+          locale: request.query.locale as any,
         })
       );
     }
@@ -276,6 +300,7 @@ export class AuthenticateController {
           token,
           errorMessage: message,
           loginUrl: frontendLoginUrl(),
+          locale: request.body.locale,
         })
       );
 
@@ -307,6 +332,7 @@ export class AuthenticateController {
           token,
           success: true,
           loginUrl: frontendLoginUrl(),
+          locale: request.body.locale,
         })
       );
     } catch {
@@ -315,6 +341,7 @@ export class AuthenticateController {
           loginUrl: frontendLoginUrl(),
           description:
             'O link de redefinição de senha é inválido ou já expirou.',
+          locale: request.body.locale,
         })
       );
     }
@@ -335,6 +362,20 @@ export class AuthenticateController {
     const userId = request.user?.id;
     if (!userId) {
       return response.status(401).json({ message: 'Não autenticado' });
+    }
+
+    // Verifica tipo de cadastro
+    const profile = await getProfileByUserId(userId);
+    if (profile?.provider_type === 'google') {
+      const locale = resolveLocale(request.body.locale);
+      const messages: Record<string, string> = {
+        en: 'Password change is not available for accounts registered with Google.',
+        es: 'No es posible cambiar la contraseña para cuentas registradas con Google.',
+      };
+      return response.status(403).json({
+        message: messages[locale] ?? 'Troca de senha não disponível para contas cadastradas pelo Google.',
+        provider_type: 'google',
+      });
     }
 
     const { data: userData, error: userError } =
@@ -379,20 +420,48 @@ export class AuthenticateController {
       return response.status(400).json({ message: error?.message ?? 'Falha no Google' });
     }
 
-    // Google já verifica o e-mail — libera o acesso no nosso gate.
-    await supabaseAdmin
-      .from('profiles')
-      .update({
-        email_registrado: true,
-        email: data.user.email,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', data.user.id);
+    // Verifica se já existe perfil com este e-mail
+    const existingProfile = await getProfileByEmail(data.user.email);
+
+    if (existingProfile && existingProfile.provider_type === 'google') {
+      // Já é conta Google: apenas faz login (atualiza flags)
+      await supabaseAdmin
+        .from('profiles')
+        .update({
+          email_registrado: true,
+          email: data.user.email,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', data.user.id);
+    } else if (existingProfile && existingProfile.provider_type === 'email') {
+      // Tem conta por email: converte para Google (vincula)
+      await supabaseAdmin
+        .from('profiles')
+        .update({
+          email_registrado: true,
+          email: data.user.email,
+          provider_type: 'google',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existingProfile.id);
+    } else {
+      // Novo usuário Google: o trigger já cria o profile, apenas atualiza flags
+      await supabaseAdmin
+        .from('profiles')
+        .update({
+          email_registrado: true,
+          provider_type: 'google',
+          email: data.user.email,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', data.user.id);
+    }
 
     return response.json({
       user: data.user,
       token: data.session?.access_token,
       refresh_token: data.session?.refresh_token,
+      provider_type: 'google',
     });
   }
 
@@ -425,6 +494,7 @@ export class AuthenticateController {
       refresh_token: data.session.refresh_token,
       token: data.session.access_token,
       user: data.user,
+      provider_type: profile?.provider_type ?? 'email',
     });
   }
 }

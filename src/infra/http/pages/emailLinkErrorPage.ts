@@ -1,28 +1,64 @@
+import { type AppLocale, resolveLocale } from '../../../core/utils/i18n';
+
 type EmailLinkErrorPageOptions = {
   loginUrl: string;
   appName?: string;
   /** Mensagem vinda do Supabase (opcional). */
   description?: string;
+  locale?: AppLocale;
 };
+
+function textsFor(locale: AppLocale) {
+  switch (locale) {
+    case 'en':
+      return {
+        lang: 'en-US',
+        title: 'Invalid link',
+        heading: 'Invalid or expired link',
+        defaultDesc: 'The confirmation link is invalid or has expired. Request a new email or log in if the account is already active.',
+        cta: 'Go to login',
+        secondary: 'Create a new account or request a new email',
+      };
+    case 'es':
+      return {
+        lang: 'es',
+        title: 'Enlace inválido',
+        heading: 'Enlace inválido o expirado',
+        defaultDesc: 'El enlace de confirmación es inválido o ya expiró. Solicita un nuevo correo o inicia sesión si la cuenta ya está activa.',
+        cta: 'Ir al inicio de sesión',
+        secondary: 'Crear una nueva cuenta o solicitar un nuevo correo',
+      };
+    default:
+      return {
+        lang: 'pt-BR',
+        title: 'Link inválido',
+        heading: 'Link inválido ou expirado',
+        defaultDesc: 'O link de confirmação é inválido ou já expirou. Solicite um novo e-mail ou faça login se a conta já estiver ativa.',
+        cta: 'Ir para o login',
+        secondary: 'Criar conta de novo ou solicitar novo e-mail',
+      };
+  }
+}
 
 /** Página HTML: link de e-mail inválido ou expirado. */
 export function renderEmailLinkErrorPage({
   loginUrl,
   appName = 'Investidor Protagonista',
   description,
+  locale = 'pt',
 }: EmailLinkErrorPageOptions): string {
   const safeLoginUrl = loginUrl.replace(/"/g, '&quot;');
+  const t = textsFor(resolveLocale(locale));
   const detail =
-    description?.trim() ||
-    'O link de confirmação é inválido ou já expirou. Solicite um novo e-mail ou faça login se a conta já estiver ativa.';
+    description?.trim() || t.defaultDesc;
 
   return `<!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="${t.lang}">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#0B0E14" />
-  <title>Link inválido — ${appName}</title>
+  <title>${t.title} — ${appName}</title>
   <style>
     :root {
       --bg: #0B0E14;
@@ -132,10 +168,10 @@ export function renderEmailLinkErrorPage({
   <main class="wrap">
     <section class="card">
       <div class="badge" aria-hidden="true"><span>!</span></div>
-      <h1>Link inválido ou expirado</h1>
+      <h1>${t.heading}</h1>
       <p>${detail.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
-      <a class="cta" href="${safeLoginUrl}">Ir para o login</a>
-      <a class="secondary" href="${safeLoginUrl}">Criar conta de novo ou solicitar novo e-mail</a>
+      <a class="cta" href="${safeLoginUrl}">${t.cta}</a>
+      <a class="secondary" href="${safeLoginUrl}">${t.secondary}</a>
       <div class="brand">${appName}</div>
     </section>
   </main>

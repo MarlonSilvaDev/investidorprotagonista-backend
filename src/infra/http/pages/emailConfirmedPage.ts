@@ -1,22 +1,56 @@
+import { type AppLocale, resolveLocale } from '../../../core/utils/i18n';
+
 type EmailConfirmedPageOptions = {
   loginUrl: string;
   appName?: string;
+  locale?: AppLocale;
 };
+
+function textsFor(locale: AppLocale) {
+  switch (locale) {
+    case 'en':
+      return {
+        lang: 'en-US',
+        title: 'Email confirmed',
+        message: 'Your account has been verified successfully.',
+        cta: 'Go to login',
+        subline: 'You can now sign in to',
+      };
+    case 'es':
+      return {
+        lang: 'es',
+        title: 'Correo confirmado',
+        message: 'Tu cuenta ha sido verificada con éxito.',
+        cta: 'Ir al inicio de sesión',
+        subline: 'Ya puedes entrar en',
+      };
+    default:
+      return {
+        lang: 'pt-BR',
+        title: 'E-mail confirmado',
+        message: 'Sua conta foi verificada com sucesso.',
+        cta: 'Ir para o login',
+        subline: 'Você já pode entrar no',
+      };
+  }
+}
 
 /** Página HTML de confirmação de e-mail (redirect do Supabase). */
 export function renderEmailConfirmedPage({
   loginUrl,
   appName = 'Investidor Protagonista',
+  locale = 'pt',
 }: EmailConfirmedPageOptions): string {
   const safeLoginUrl = loginUrl.replace(/"/g, '&quot;');
+  const t = textsFor(resolveLocale(locale));
 
   return `<!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="${t.lang}">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#0B0E14" />
-  <title>E-mail confirmado — ${appName}</title>
+  <title>${t.title} — ${appName}</title>
   <style>
     :root {
       --bg: #0B0E14;
@@ -117,12 +151,12 @@ export function renderEmailConfirmedPage({
   <main class="wrap">
     <section class="card">
       <div class="badge" aria-hidden="true"><span>✓</span></div>
-      <h1>E-mail confirmado</h1>
+      <h1>${t.title}</h1>
       <p>
-        Sua conta foi verificada com sucesso.<br />
-        Você já pode entrar no ${appName}.
+        ${t.message}<br />
+        ${t.subline} ${appName}.
       </p>
-      <a class="cta" href="${safeLoginUrl}">Ir para o login</a>
+      <a class="cta" href="${safeLoginUrl}">${t.cta}</a>
       <div class="brand">${appName}</div>
     </section>
   </main>
