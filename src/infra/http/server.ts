@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { routes } from './routes';
+import { renderAuthCallbackGatewayPage } from './pages/emailLinkErrorPage';
 
 const app = express();
 
@@ -14,8 +15,20 @@ app.use(
 );
 app.use(express.json());
 
+const frontendLoginUrl = () => {
+  const base = (process.env.FRONTEND_URL || 'http://localhost:8080').replace(
+    /\/$/,
+    ''
+  );
+  return `${base}/login`;
+};
+
+/** Site URL do Supabase: trata #error=otp_expired no hash do browser. */
 app.get('/', (_request, response) => {
-  return response.status(200).send('API running');
+  return response
+    .status(200)
+    .type('html')
+    .send(renderAuthCallbackGatewayPage({ loginUrl: frontendLoginUrl() }));
 });
 
 app.use(routes);

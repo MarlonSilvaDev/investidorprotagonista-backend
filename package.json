@@ -25,12 +25,14 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
+    "nodemailer": "^9.0.3",
     "prisma": "^7.9.1",
     "stripe": "^22.3.2",
     "ts-node-dev": "^2.0.0",
     "typescript": "5.8.3"
   },
   "devDependencies": {
+    "@types/nodemailer": "^8.0.1",
     "tsx": "^4.23.1"
   }
 }

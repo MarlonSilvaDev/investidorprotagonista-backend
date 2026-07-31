@@ -23,6 +23,8 @@ create table if not exists public.profiles (
   notification_channel text default 'app', -- app | whatsapp
   notification_time text default '08:00',
   whatsapp_session_state text default 'idle',
+  -- Confirmado pelo link do nosso backend (SMTP próprio), não pelo e-mail do Supabase
+  email_registrado boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -41,7 +43,8 @@ begin
     email,
     subscription_status,
     trial_started_at,
-    subscription_expires_at
+    subscription_expires_at,
+    email_registrado
   )
   values (
     new.id,
@@ -49,7 +52,8 @@ begin
     new.email,
     'trial',
     now(),
-    now() + interval '1 year'
+    now() + interval '1 year',
+    false
   );
   return new;
 end;
@@ -266,7 +270,11 @@ create policy "shared_accounts_update_owner" on public.shared_accounts
 -- Adicionar coluna role na tabela profiles
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS role text NOT NULL DEFAULT 'padrao';
 
--- Atualizar funcao handle_new_user para incluir o role
+-- Confirmação de e-mail pelo backend (SMTP próprio)
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS email_registrado boolean NOT NULL DEFAULT false;
+
+-- Atualizar funcao handle_new_user para incluir role + email_registrado
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -281,7 +289,8 @@ BEGIN
     subscription_status,
     trial_started_at,
     subscription_expires_at,
-    role
+    role,
+    email_registrado
   )
   VALUES (
     new.id,
@@ -290,7 +299,8 @@ BEGIN
     'trial',
     NOW(),
     NOW() + interval '1 year',
-    COALESCE(new.raw_user_meta_data->>'role', 'padrao')
+    COALESCE(new.raw_user_meta_data->>'role', 'padrao'),
+    false
   );
   RETURN new;
 END;

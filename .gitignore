@@ -3,3 +3,6 @@ node_modules
 .env
 
 /generated/prisma
+
+# Chave privada de criptografia de credenciais (nunca versionar)
+keys/credentials_private.pem
