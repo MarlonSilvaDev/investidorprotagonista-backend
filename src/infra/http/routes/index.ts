@@ -12,7 +12,10 @@ import { dashboardRoutes } from './dashboard.routes';
 import { syncRoutes } from './sync.routes';
 import { analyticsRoutes } from './analytics.routes';
 import { categoryRoutes } from './category.routes';
+import { postRoutes } from './post.routes';
+import { adminRoutes } from './admin.routes';
 import { ensureAuthenticated } from '../middlewares/ensureAuthenticated';
+import { ensureAdmin } from '../middlewares/ensureAdmin';
 import { checkLicensing } from '../middlewares/checkLicensing';
 
 const routes = Router();
@@ -22,6 +25,10 @@ routes.use('/auth', authenticateRoutes);
 routes.use('/payment/webhook', paymentRoutes);
 routes.use('/integrations/webhook', integrationRoutes); // Webhooks públicos
 routes.use('/analytics', analyticsRoutes);
+routes.use('/posts', postRoutes);
+
+// Admin (auth + role administrador) — sem checkLicensing
+routes.use('/admin', ensureAuthenticated, ensureAdmin, adminRoutes);
 
 // Rotas Protegidas por Auth + Licenciamento
 routes.use('/payment', ensureAuthenticated, paymentRoutes);

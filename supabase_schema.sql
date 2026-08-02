@@ -335,3 +335,24 @@ create table if not exists public.sms_verifications (
 );
 
 create index if not exists idx_sms_verifications_email on public.sms_verifications (email);
+
+-- ═══════════════════════════════════════════
+-- POSTS (blog)
+-- ═══════════════════════════════════════════
+create table if not exists public.posts (
+  id uuid primary key default gen_random_uuid(),
+  slug text not null unique,
+  title text not null,
+  content text not null,
+  excerpt text not null,
+  cover_image text not null,
+  category text not null,
+  author text,
+  views integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_posts_created_at on public.posts (created_at desc);
+create index if not exists idx_posts_category on public.posts (category);
+create index if not exists idx_posts_slug on public.posts (slug);

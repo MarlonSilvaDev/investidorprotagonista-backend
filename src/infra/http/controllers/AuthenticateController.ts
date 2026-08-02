@@ -32,7 +32,7 @@ function frontendLoginUrl(): string {
 async function getProfileByUserId(userId: string) {
   const { data, error } = await supabaseAdmin
     .from('profiles')
-    .select('id, email, name, email_registrado, provider_type')
+    .select('id, email, name, email_registrado, provider_type, role')
     .eq('id', userId)
     .maybeSingle();
 
@@ -45,7 +45,7 @@ async function getProfileByUserId(userId: string) {
 async function getProfileByEmail(email: string) {
   const { data, error } = await supabaseAdmin
     .from('profiles')
-    .select('id, email, name, email_registrado, provider_type')
+    .select('id, email, name, email_registrado, provider_type, role')
     .eq('email', email)
     .maybeSingle();
 
@@ -256,6 +256,7 @@ export class AuthenticateController {
       token: data.session?.access_token,
       refresh_token: data.session?.refresh_token,
       provider_type: profile?.provider_type ?? 'email',
+      role: profile?.role ?? 'padrao',
     });
   }
 
@@ -515,11 +516,14 @@ export class AuthenticateController {
         .eq('id', data.user.id);
     }
 
+    const profile = await getProfileByUserId(data.user.id);
+
     return response.json({
       user: data.user,
       token: data.session?.access_token,
       refresh_token: data.session?.refresh_token,
       provider_type: 'google',
+      role: profile?.role ?? 'padrao',
     });
   }
 
@@ -553,6 +557,7 @@ export class AuthenticateController {
       token: data.session.access_token,
       user: data.user,
       provider_type: profile?.provider_type ?? 'email',
+      role: profile?.role ?? 'padrao',
     });
   }
 }

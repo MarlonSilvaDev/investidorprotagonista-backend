@@ -143,3 +143,27 @@ CREATE TABLE IF NOT EXISTS public.sms_verifications (
 );
 
 CREATE INDEX IF NOT EXISTS idx_sms_verifications_email ON public.sms_verifications (email);
+
+-- ═══════════════════════════════════════════
+-- POSTS (blog — gerenciados pelo app admin via API)
+-- ═══════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS public.posts (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  slug text NOT NULL UNIQUE,
+  title text NOT NULL,
+  content text NOT NULL,
+  excerpt text NOT NULL,
+  cover_image text NOT NULL,
+  category text NOT NULL,
+  author text,
+  views integer NOT NULL DEFAULT 0,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_posts_created_at ON public.posts (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_posts_category ON public.posts (category);
+CREATE INDEX IF NOT EXISTS idx_posts_slug ON public.posts (slug);
+
+COMMENT ON TABLE public.posts IS
+  'Posts do blog. CRUD apenas via backend (service role) por usuários com role administrador.';
