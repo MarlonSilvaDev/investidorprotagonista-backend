@@ -4,7 +4,12 @@ import {
   signAuthMailToken,
   verifyAuthMailToken,
 } from '../../../core/utils/AuthTokenService';
-import { isValidEmail, validatePassword } from '../../../core/utils/AuthValidation';
+import {
+  isValidEmail,
+  normalizeCpf,
+  validateCpf,
+  validatePassword,
+} from '../../../core/utils/AuthValidation';
 import {
   sendConfirmationEmail,
   sendPasswordResetEmail,
@@ -32,7 +37,7 @@ function frontendLoginUrl(): string {
 async function getProfileByUserId(userId: string) {
   const { data, error } = await supabaseAdmin
     .from('profiles')
-    .select('id, email, name, email_registrado, provider_type, role')
+    .select('id, email, name, email_registrado, provider_type, role, cpf')
     .eq('id', userId)
     .maybeSingle();
 
@@ -45,8 +50,21 @@ async function getProfileByUserId(userId: string) {
 async function getProfileByEmail(email: string) {
   const { data, error } = await supabaseAdmin
     .from('profiles')
-    .select('id, email, name, email_registrado, provider_type, role')
+    .select('id, email, name, email_registrado, provider_type, role, cpf')
     .eq('email', email)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+  return data;
+}
+
+async function getProfileByCpf(cpf: string) {
+  const { data, error } = await supabaseAdmin
+    .from('profiles')
+    .select('id, email, name, email_registrado, provider_type, role, cpf')
+    .eq('cpf', cpf)
     .maybeSingle();
 
   if (error) {
@@ -64,6 +82,7 @@ export class AuthenticateController {
     const name = String(request.body.name || '').trim();
     const phone = String(request.body.phone || '').trim();
     const nickname = String(request.body.nickname || '').trim();
+    const cpf = normalizeCpf(String(request.body.cpf || ''));
 
     if (!isValidEmail(email)) {
       return response.status(400).json({ message: 'E-mail inválido' });
@@ -74,9 +93,21 @@ export class AuthenticateController {
     if (!phone) {
       return response.status(400).json({ message: 'Celular é obrigatório' });
     }
+    const cpfError = validateCpf(cpf);
+    if (cpfError) {
+      return response.status(400).json({ message: cpfError });
+    }
     const passwordError = validatePassword(password);
     if (passwordError) {
       return response.status(400).json({ message: passwordError });
+    }
+
+    // CPF é o identificador único da conta
+    const existingByCpf = await getProfileByCpf(cpf);
+    if (existingByCpf) {
+      return response.status(409).json({
+        message: 'Já existe uma conta cadastrada com este CPF',
+      });
     }
 
     // Auth do Supabase sem fluxo de e-mail dele.
@@ -85,7 +116,7 @@ export class AuthenticateController {
       email,
       password,
       email_confirm: true,
-      user_metadata: { name, phone, nickname },
+      user_metadata: { name, phone, nickname, cpf },
     });
 
     if (error || !data.user) {
@@ -94,21 +125,34 @@ export class AuthenticateController {
       });
     }
 
-    // Garante flag false e atualiza nickname/phone no profile
-    await supabaseAdmin
+    // Garante flag false e grava CPF/nickname/phone no profile
+    const { error: profileError } = await supabaseAdmin
       .from('profiles')
-      .update({ 
-        email_registrado: false, 
-        name, 
-        email, 
-        phone_number: phone, 
-        nickname 
+      .update({
+        email_registrado: false,
+        name,
+        email,
+        phone_number: phone,
+        nickname,
+        cpf,
       })
       .eq('id', data.user.id);
 
+    if (profileError) {
+      await supabaseAdmin.auth.admin.deleteUser(data.user.id);
+      const isDuplicateCpf =
+        profileError.code === '23505' ||
+        /cpf|unique/i.test(profileError.message || '');
+      return response.status(isDuplicateCpf ? 409 : 400).json({
+        message: isDuplicateCpf
+          ? 'Já existe uma conta cadastrada com este CPF'
+          : profileError.message || 'Não foi possível criar a conta',
+      });
+    }
+
     // Gera código SMS (OTP)
     const smsCode = Math.floor(100000 + Math.random() * 900000).toString();
-    
+
     // Salva no banco para validação posterior
     await supabaseAdmin.from('sms_verifications').insert({
       email,
@@ -122,6 +166,7 @@ export class AuthenticateController {
     return response.status(201).json({
       id: data.user.id,
       email,
+      cpf,
       requires_email_confirmation: false,
       requires_sms_verification: true,
       provider_type: 'email',
@@ -257,6 +302,7 @@ export class AuthenticateController {
       refresh_token: data.session?.refresh_token,
       provider_type: profile?.provider_type ?? 'email',
       role: profile?.role ?? 'padrao',
+      cpf: profile?.cpf ?? null,
     });
   }
 
@@ -517,6 +563,7 @@ export class AuthenticateController {
     }
 
     const profile = await getProfileByUserId(data.user.id);
+    const firstAccess = !profile?.cpf;
 
     return response.json({
       user: data.user,
@@ -524,6 +571,69 @@ export class AuthenticateController {
       refresh_token: data.session?.refresh_token,
       provider_type: 'google',
       role: profile?.role ?? 'padrao',
+      cpf: profile?.cpf ?? null,
+      first_access: firstAccess,
+    });
+  }
+
+  /**
+   * Primeiro acesso Google (sem CPF): grava CPF único na conta autenticada.
+   * Contas que já têm CPF não podem alterar por este endpoint.
+   */
+  async completeCpf(request: Request, response: Response) {
+    const userId = request.user?.id;
+    if (!userId) {
+      return response.status(401).json({ message: 'Não autenticado' });
+    }
+
+    const cpf = normalizeCpf(String(request.body.cpf || ''));
+    const cpfError = validateCpf(cpf);
+    if (cpfError) {
+      return response.status(400).json({ message: cpfError });
+    }
+
+    const profile = await getProfileByUserId(userId);
+    if (!profile) {
+      return response.status(404).json({ message: 'Usuário não encontrado' });
+    }
+
+    if (profile.cpf) {
+      return response.status(400).json({
+        message: 'Esta conta já possui CPF cadastrado',
+        first_access: false,
+        cpf: profile.cpf,
+      });
+    }
+
+    const existingByCpf = await getProfileByCpf(cpf);
+    if (existingByCpf && existingByCpf.id !== userId) {
+      return response.status(409).json({
+        message: 'Já existe uma conta cadastrada com este CPF',
+      });
+    }
+
+    const { error } = await supabaseAdmin
+      .from('profiles')
+      .update({
+        cpf,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', userId);
+
+    if (error) {
+      const isDuplicateCpf =
+        error.code === '23505' || /cpf|unique/i.test(error.message || '');
+      return response.status(isDuplicateCpf ? 409 : 400).json({
+        message: isDuplicateCpf
+          ? 'Já existe uma conta cadastrada com este CPF'
+          : error.message || 'Não foi possível salvar o CPF',
+      });
+    }
+
+    return response.json({
+      message: 'CPF cadastrado com sucesso',
+      cpf,
+      first_access: false,
     });
   }
 

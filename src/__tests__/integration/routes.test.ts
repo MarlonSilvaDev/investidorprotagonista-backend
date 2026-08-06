@@ -48,6 +48,7 @@ describe('Backend Routes Configuration', () => {
     shared: [
       '/shared/invite',
       '/shared/accept',
+      '/shared/unlink',
       '/shared/list',
     ],
     admin: [
@@ -175,6 +176,10 @@ describe('Backend Routes Configuration', () => {
 
     it('should have accept route', () => {
       expect(expectedRoutes.shared).toContain('/shared/accept');
+    });
+
+    it('should have unlink route', () => {
+      expect(expectedRoutes.shared).toContain('/shared/unlink');
     });
 
     it('should have list route', () => {

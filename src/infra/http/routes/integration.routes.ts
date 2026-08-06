@@ -1,12 +1,46 @@
 import { Router } from 'express';
 import { IntegrationController } from '../controllers/IntegrationController';
+import { OpenFinanceController } from '../controllers/OpenFinanceController';
 import { ensureAuthenticated } from '../middlewares/ensureAuthenticated';
 import { checkLicensing } from '../middlewares/checkLicensing';
 
 const integrationRoutes = Router();
 const integrationController = new IntegrationController();
+const openFinanceController = new OpenFinanceController();
 
-// Sincronização Manual (Protegida)
+// ─── OPEN FINANCE (Opção A: proxy + snapshot; extrato só no Drift) ───
+integrationRoutes.post(
+  '/open-finance/connect-token',
+  ensureAuthenticated,
+  checkLicensing,
+  (req, res) => openFinanceController.createConnectToken(req, res)
+);
+integrationRoutes.get(
+  '/open-finance/items',
+  ensureAuthenticated,
+  checkLicensing,
+  (req, res) => openFinanceController.listItems(req, res)
+);
+integrationRoutes.get(
+  '/open-finance/items/:itemId/snapshot',
+  ensureAuthenticated,
+  checkLicensing,
+  (req, res) => openFinanceController.getSnapshot(req, res)
+);
+integrationRoutes.post(
+  '/open-finance/items/:itemId/refresh',
+  ensureAuthenticated,
+  checkLicensing,
+  (req, res) => openFinanceController.refreshItem(req, res)
+);
+integrationRoutes.delete(
+  '/open-finance/items/:itemId',
+  ensureAuthenticated,
+  checkLicensing,
+  (req, res) => openFinanceController.deleteItem(req, res)
+);
+
+// Legado Pluggy — token redireciona internamente; sync desativado (410)
 integrationRoutes.get(
   '/pluggy/token',
   ensureAuthenticated,
@@ -43,4 +77,4 @@ integrationRoutes.post('/webhook/whatsapp', (req, res) =>
   integrationController.whatsappWebhook(req, res)
 );
 
-export { integrationRoutes };
+export { integrationRoutes, openFinanceController };

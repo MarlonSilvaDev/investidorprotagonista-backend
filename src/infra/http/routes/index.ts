@@ -7,11 +7,13 @@ import { taskRoutes } from './task.routes';
 import { cardRoutes } from './card.routes';
 import { subscriptionRoutes } from './subscription.routes';
 import { paymentRoutes } from './payment.routes';
-import { integrationRoutes } from './integration.routes';
+import { integrationRoutes, openFinanceController } from './integration.routes';
+import { IntegrationController } from '../controllers/IntegrationController';
 import { dashboardRoutes } from './dashboard.routes';
 import { syncRoutes } from './sync.routes';
 import { analyticsRoutes } from './analytics.routes';
 import { categoryRoutes } from './category.routes';
+import { sharedRoutes } from './shared.routes';
 import { postRoutes } from './post.routes';
 import { adminRoutes } from './admin.routes';
 import { ensureAuthenticated } from '../middlewares/ensureAuthenticated';
@@ -19,11 +21,18 @@ import { ensureAdmin } from '../middlewares/ensureAdmin';
 import { checkLicensing } from '../middlewares/checkLicensing';
 
 const routes = Router();
+const publicIntegrationController = new IntegrationController();
 
 // Rotas Públicas
 routes.use('/auth', authenticateRoutes);
 routes.use('/payment/webhook', paymentRoutes);
-routes.use('/integrations/webhook', integrationRoutes); // Webhooks públicos
+// Webhooks públicos (não montar o router inteiro — evita expor pluggy/token sem auth)
+routes.post('/integrations/webhook/whatsapp', (req, res) =>
+  publicIntegrationController.whatsappWebhook(req, res)
+);
+routes.post('/integrations/open-finance/webhook', (req, res) =>
+  openFinanceController.webhook(req, res)
+);
 routes.use('/analytics', analyticsRoutes);
 routes.use('/posts', postRoutes);
 
@@ -42,5 +51,6 @@ routes.use('/tasks', ensureAuthenticated, checkLicensing, taskRoutes);
 routes.use('/cards', ensureAuthenticated, checkLicensing, cardRoutes);
 routes.use('/subscriptions', ensureAuthenticated, checkLicensing, subscriptionRoutes);
 routes.use('/categories', ensureAuthenticated, checkLicensing, categoryRoutes);
+routes.use('/shared', ensureAuthenticated, checkLicensing, sharedRoutes);
 
 export { routes };

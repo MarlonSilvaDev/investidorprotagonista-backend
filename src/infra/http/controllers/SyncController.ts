@@ -204,6 +204,23 @@ function mapRow(
   }
 }
 
+/** Detecta linhas criadas pelo legado POST /integrations/pluggy/sync. */
+function isLegacyOpenFinanceRow(entity: SyncEntity, row: Record<string, unknown>): boolean {
+  if (entity === 'transaction') {
+    if (row.external_id) return true;
+    const description = String(row.description ?? '');
+    const category = String(row.category ?? '');
+    return (
+      description.includes('Sincronizado via Pluggy') ||
+      category === 'Open Finance'
+    );
+  }
+  if (entity === 'investment') {
+    return Boolean(row.external_id);
+  }
+  return false;
+}
+
 export class SyncController {
   async push(request: Request, response: Response) {
     const { id: userId } = request.user;
@@ -257,6 +274,20 @@ export class SyncController {
             server_id: clientId,
             entity,
             status: 'applied',
+          });
+          continue;
+        }
+
+        // Defensivo: não persistir payload marcado como Open Finance.
+        const origin = String(
+          payload.dataOrigin ?? payload.data_origin ?? 'manual'
+        ).toLowerCase();
+        if (origin === 'openfinance' || origin === 'open_finance') {
+          results.push({
+            client_id: clientId,
+            entity,
+            status: 'ignored',
+            message: 'Open Finance data is local-only',
           });
           continue;
         }
@@ -339,7 +370,10 @@ export class SyncController {
         return response.status(400).json({ message: error.message, entity });
       }
 
-      changes[`${entity}s`] = data ?? [];
+      // Exclui lixo legado do antigo pluggy/sync (OF não deve entrar no pull).
+      const rows = (data ?? []).filter((row) => !isLegacyOpenFinanceRow(entity, row));
+      // Usa plural do TABLE_BY_ENTITY (category → categories, não categorys).
+      changes[TABLE_BY_ENTITY[entity]] = rows;
     }
 
     // Retorna também as exclusões (deleted_at != NULL) para o app remover do Drift
@@ -358,7 +392,7 @@ export class SyncController {
 
       const { data } = await query;
       if (data && data.length > 0) {
-        deletions[`${entity}s`] = data;
+        deletions[TABLE_BY_ENTITY[entity]] = data;
       }
     }
 

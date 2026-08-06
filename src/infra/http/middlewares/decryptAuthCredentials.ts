@@ -19,9 +19,12 @@ export function decryptAuthCredentials(
       });
     }
 
+    const outerBody = (request.body ?? {}) as Record<string, unknown>;
+    // Preserva campos fora do envelope (ex.: locale) e sobrescreve com o payload AES.
+    const { ek: _ek, iv: _iv, data: _data, ...preservedOuter } = outerBody;
     const { credentials, aesKey } = openCredentialsEnvelope(request.body);
     request.credentialsAesKey = aesKey;
-    request.body = { ...credentials };
+    request.body = { ...preservedOuter, ...credentials };
 
     const originalJson = response.json.bind(response);
     response.json = ((body: unknown) => {

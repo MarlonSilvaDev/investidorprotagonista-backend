@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { isValidEmail, validatePassword } from '../../core/utils/AuthValidation';
+import {
+  isValidCpf,
+  isValidEmail,
+  normalizeCpf,
+  validateCpf,
+  validatePassword,
+} from '../../core/utils/AuthValidation';
 
 describe('AuthValidation', () => {
   describe('isValidEmail', () => {
@@ -99,6 +105,30 @@ describe('AuthValidation', () => {
 
     it('should return error for password with whitespace only', () => {
       expect(validatePassword('        ')).toBe('A senha deve ter no mínimo 8 caracteres');
+    });
+  });
+
+  describe('normalizeCpf / isValidCpf / validateCpf', () => {
+    it('should normalize masked CPF to digits', () => {
+      expect(normalizeCpf('529.982.247-25')).toBe('52998224725');
+    });
+
+    it('should accept a valid CPF', () => {
+      expect(isValidCpf('529.982.247-25')).toBe(true);
+      expect(validateCpf('52998224725')).toBeNull();
+    });
+
+    it('should reject empty CPF', () => {
+      expect(validateCpf('')).toBe('CPF é obrigatório');
+    });
+
+    it('should reject invalid check digits', () => {
+      expect(isValidCpf('52998224726')).toBe(false);
+      expect(validateCpf('52998224726')).toBe('CPF inválido');
+    });
+
+    it('should reject repeated sequences', () => {
+      expect(isValidCpf('11111111111')).toBe(false);
     });
   });
 });

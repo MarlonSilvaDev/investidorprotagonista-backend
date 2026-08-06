@@ -119,6 +119,7 @@ describe('SyncController', () => {
       const pullResponse = {
         changes: {
           transactions: [],
+          categories: [],
           goals: [],
           tasks: [],
           cards: [],
@@ -136,6 +137,7 @@ describe('SyncController', () => {
         expect.objectContaining({
           changes: expect.objectContaining({
             transactions: expect.any(Array),
+            categories: expect.any(Array),
             goals: expect.any(Array),
           }),
         }),
@@ -181,6 +183,7 @@ describe('SyncController', () => {
       const pullResponse = {
         changes: {
           transactions: [],
+          categories: [],
           goals: [],
           tasks: [],
           cards: [],
@@ -197,6 +200,7 @@ describe('SyncController', () => {
         expect.objectContaining({
           changes: expect.objectContaining({
             transactions: expect.any(Array),
+            categories: expect.any(Array),
             goals: expect.any(Array),
             tasks: expect.any(Array),
             cards: expect.any(Array),

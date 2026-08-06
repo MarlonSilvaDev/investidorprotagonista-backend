@@ -8,70 +8,33 @@ export class IntegrationController {
   // ─── PLUGGY (OPEN FINANCE) ───
   async getPluggyToken(request: Request, response: Response) {
     try {
-      const accessToken = await BankIntegrationService.createConnectToken();
-      return response.json({ accessToken });
+      // Compat: aponta para o mesmo fluxo do Open Finance (sem persistir extrato).
+      const { id: userId } = request.user;
+      const token = await BankIntegrationService.createConnectToken({
+        clientUserId: userId,
+      });
+      return response.json({
+        accessToken: token.accessToken,
+        connectToken: token.connectToken,
+        expiresIn: token.expiresIn,
+      });
     } catch (error: any) {
       return response.status(500).json({ message: error.message || 'Failed to create Pluggy token' });
     }
   }
 
-  async syncPluggyAccount(request: Request, response: Response) {
-    const { id: userId } = request.user;
-    const { itemId } = request.body;
-
-    if (!itemId) {
-      return response.status(400).json({ message: 'itemId is required' });
-    }
-
-    try {
-      const [accounts, investments] = await Promise.all([
-        BankIntegrationService.getAccounts(itemId),
-        BankIntegrationService.getInvestments(itemId),
-      ]);
-
-      for (const account of accounts || []) {
-        const transactions = await BankIntegrationService.getTransactions(account.id);
-
-        for (const tx of transactions || []) {
-          await supabase.from('transactions').upsert(
-            {
-              user_id: userId,
-              external_id: tx.id,
-              title: tx.description || 'Pluggy',
-              amount: Math.abs(tx.amount || 0),
-              type: (tx.amount || 0) >= 0 ? 'income' : 'expense',
-              category: tx.category || 'Open Finance',
-              date: tx.date || new Date().toISOString(),
-              description: `Sincronizado via Pluggy (${account.name || account.type})`,
-            },
-            { onConflict: 'external_id' }
-          );
-        }
-      }
-
-      for (const investment of investments || []) {
-        await supabase.from('investments').upsert(
-          {
-            user_id: userId,
-            external_id: investment.id,
-            ticker: investment.code || investment.name,
-            asset_class: investment.type || 'other',
-            total_invested: investment.balance || 0,
-            current_total: investment.balance || 0,
-            quantity: investment.quantity || 0,
-          },
-          { onConflict: 'external_id' }
-        );
-      }
-
-      return response.json({
-        message: 'Pluggy sync completed',
-        accounts: accounts?.length || 0,
-        investments: investments?.length || 0,
-      });
-    } catch (error: any) {
-      return response.status(500).json({ message: error.message || 'Failed to sync Pluggy account' });
-    }
+  /**
+   * LEGADO DESATIVADO (410 Gone).
+   * Open Finance agora é local-only no Flutter: use
+   * POST /integrations/open-finance/connect-token + GET .../snapshot.
+   * Este endpoint não deve mais gravar txs/investments no Supabase.
+   */
+  async syncPluggyAccount(_request: Request, response: Response) {
+    return response.status(410).json({
+      message:
+        'POST /integrations/pluggy/sync foi desativado. Use /integrations/open-finance/* (snapshot local no app).',
+      code: 'PLUGGY_SYNC_GONE',
+    });
   }
 
   // ─── B3 / BRAPI ───

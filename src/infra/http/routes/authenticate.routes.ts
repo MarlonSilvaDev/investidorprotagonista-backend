@@ -73,6 +73,11 @@ authenticateRoutes.post(
 );
 
 authenticateRoutes.post('/google', (req, res) => authenticateController.google(req, res));
+authenticateRoutes.post(
+  '/complete-cpf',
+  ensureAuthenticated,
+  (req, res) => authenticateController.completeCpf(req, res)
+);
 authenticateRoutes.post('/refresh', (req, res) => authenticateController.refresh(req, res));
 
 export { authenticateRoutes };
