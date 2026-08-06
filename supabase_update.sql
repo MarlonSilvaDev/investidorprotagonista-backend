@@ -167,3 +167,42 @@ CREATE INDEX IF NOT EXISTS idx_posts_slug ON public.posts (slug);
 
 COMMENT ON TABLE public.posts IS
   'Posts do blog. CRUD apenas via backend (service role) por usuários com role administrador.';
+
+-- ═══════════════════════════════════════════
+-- MARKET ASSETS (cotação diária — seção Ativos da home)
+-- Atualizar diariamente: price + change_percent
+-- change_percent > 0 = aumentou | < 0 = diminuiu | 0 = estável
+-- ═══════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS public.market_assets (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  symbol text NOT NULL UNIQUE,
+  name text NOT NULL,
+  price numeric(18, 6) NOT NULL,
+  change_percent numeric(10, 4) NOT NULL DEFAULT 0,
+  sort_order integer NOT NULL DEFAULT 0,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_market_assets_active_sort
+  ON public.market_assets (is_active, sort_order ASC, symbol ASC);
+
+COMMENT ON TABLE public.market_assets IS
+  'Ativos exibidos na home (seção Ativos). Atualizar price e change_percent diariamente.';
+COMMENT ON COLUMN public.market_assets.symbol IS
+  'Ticker / código do ativo (ex.: PETR4, VALE3, BTC, IBOV).';
+COMMENT ON COLUMN public.market_assets.price IS
+  'Cotação atual do ativo.';
+COMMENT ON COLUMN public.market_assets.change_percent IS
+  'Variação percentual do dia. Positivo = aumentou; negativo = diminuiu.';
+
+-- Exemplo de upsert diário:
+-- INSERT INTO public.market_assets (symbol, name, price, change_percent, sort_order)
+-- VALUES ('PETR4', 'Petrobras PN', 38.450000, 1.2300, 1)
+-- ON CONFLICT (symbol) DO UPDATE SET
+--   price = EXCLUDED.price,
+--   change_percent = EXCLUDED.change_percent,
+--   name = EXCLUDED.name,
+--   sort_order = EXCLUDED.sort_order,
+--   updated_at = now();

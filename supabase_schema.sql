@@ -356,3 +356,21 @@ create table if not exists public.posts (
 create index if not exists idx_posts_created_at on public.posts (created_at desc);
 create index if not exists idx_posts_category on public.posts (category);
 create index if not exists idx_posts_slug on public.posts (slug);
+
+-- ═══════════════════════════════════════════
+-- MARKET ASSETS (cotação diária — seção Ativos)
+-- ═══════════════════════════════════════════
+create table if not exists public.market_assets (
+  id uuid primary key default gen_random_uuid(),
+  symbol text not null unique,
+  name text not null,
+  price numeric(18, 6) not null,
+  change_percent numeric(10, 4) not null default 0,
+  sort_order integer not null default 0,
+  is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_market_assets_active_sort
+  on public.market_assets (is_active, sort_order asc, symbol asc);
