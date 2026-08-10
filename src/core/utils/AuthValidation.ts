@@ -42,6 +42,61 @@ export function validateCpf(cpf: string): string | null {
   return null;
 }
 
+export function normalizeCnpj(cnpj: string): string {
+  return String(cnpj || '').replace(/\D/g, '');
+}
+
+export function isValidCnpj(cnpj: string): boolean {
+  const digits = normalizeCnpj(cnpj);
+  if (digits.length !== 14) return false;
+  if (/^(\d)\1{13}$/.test(digits)) return false;
+
+  const calcDigit = (base: string, weights: number[]): number => {
+    let sum = 0;
+    for (let i = 0; i < base.length; i += 1) {
+      sum += Number(base[i]) * (weights[i] ?? 0);
+    }
+    const mod = sum % 11;
+    return mod < 2 ? 0 : 11 - mod;
+  };
+
+  const weights1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  const weights2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+
+  const d1 = calcDigit(digits.slice(0, 12), weights1);
+  const d2 = calcDigit(digits.slice(0, 13), weights2);
+  return d1 === Number(digits[12]) && d2 === Number(digits[13]);
+}
+
+export function validateCnpj(cnpj: string): string | null {
+  const digits = normalizeCnpj(cnpj);
+  if (!digits) {
+    return 'CNPJ é obrigatório';
+  }
+  if (!isValidCnpj(digits)) {
+    return 'CNPJ inválido';
+  }
+  return null;
+}
+
+export function validateDocument(
+  country: string,
+  userType: string,
+  documentNumber: string
+): string | null {
+  const doc = String(documentNumber || '').trim();
+  if (country === 'BR') {
+    if (userType === 'empresa') {
+      return validateCnpj(doc);
+    }
+    return validateCpf(doc);
+  }
+  if (!doc || doc.length < 3) {
+    return 'Documento é obrigatório e deve ter no mínimo 3 caracteres';
+  }
+  return null;
+}
+
 export function validatePassword(password: string): string | null {
   if (!password || password.length < 8) {
     return 'A senha deve ter no mínimo 8 caracteres';

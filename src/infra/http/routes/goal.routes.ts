@@ -7,5 +7,6 @@ const goalController = new GoalController();
 goalRoutes.get('/', goalController.list);
 goalRoutes.post('/', goalController.create);
 goalRoutes.put('/:id', goalController.update);
+goalRoutes.delete('/:id', goalController.delete);
 
 export { goalRoutes };

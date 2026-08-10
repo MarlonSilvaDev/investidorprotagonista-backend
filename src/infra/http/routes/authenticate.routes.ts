@@ -39,7 +39,7 @@ authenticateRoutes.get('/email-link-error', (req, res) => {
   res.status(200).type('html').send(
     renderEmailLinkErrorPage({
       loginUrl: frontendLoginUrl(),
-      description,
+      ...(description ? { description } : {}),
     })
   );
 });

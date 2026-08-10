@@ -2,10 +2,10 @@
   "name": "investidorprotagonista-backend",
   "version": "1.0.0",
   "description": "Backend API for Investidor Protagonista",
-  "main": "src/index.js",
+  "main": "dist/infra/http/server.js",
   "scripts": {
-    "start": "node dist/index.js",
-    "dev": "ts-node src/index.ts",
+    "start": "node dist/infra/http/server.js",
+    "dev": "ts-node src/infra/http/server.ts",
     "build": "tsc",
     "test": "vitest run",
     "test:watch": "vitest",

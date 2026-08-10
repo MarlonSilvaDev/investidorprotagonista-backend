@@ -6,6 +6,7 @@ const transactionController = new TransactionController();
 
 transactionRoutes.get('/', transactionController.list);
 transactionRoutes.post('/', transactionController.create);
+transactionRoutes.put('/:id', transactionController.update);
 transactionRoutes.delete('/:id', transactionController.delete);
 
 export { transactionRoutes };

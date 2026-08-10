@@ -9,6 +9,7 @@ export class TaskController {
       .from('tasks')
       .select('*')
       .eq('user_id', userId)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -20,7 +21,20 @@ export class TaskController {
 
   async create(request: Request, response: Response) {
     const { id: userId } = request.user;
-    const { title, description, dueDate, priority } = request.body;
+    const {
+      title,
+      description,
+      dueDate,
+      priority,
+      isCompleted,
+      linkedTransactionId,
+    } = request.body;
+
+    if (!title) {
+      return response.status(400).json({ message: 'Título é obrigatório' });
+    }
+
+    const completed = isCompleted === true;
 
     const { data, error } = await supabase
       .from('tasks')
@@ -28,9 +42,12 @@ export class TaskController {
         {
           user_id: userId,
           title,
-          description,
-          due_date: dueDate,
+          description: description ?? null,
+          due_date: dueDate ? new Date(dueDate).toISOString() : null,
           priority: priority || 'medium',
+          is_completed: completed,
+          linked_transaction_id: linkedTransactionId ?? null,
+          completed_at: completed ? new Date().toISOString() : null,
         },
       ])
       .select()
@@ -43,6 +60,45 @@ export class TaskController {
     return response.status(201).json(data);
   }
 
+  async update(request: Request, response: Response) {
+    const { id: userId } = request.user;
+    const { id } = request.params;
+    const {
+      title,
+      description,
+      dueDate,
+      priority,
+      isCompleted,
+      linkedTransactionId,
+    } = request.body;
+
+    const updates: Record<string, unknown> = {};
+    if (title !== undefined) updates.title = title;
+    if (description !== undefined) updates.description = description;
+    if (dueDate !== undefined) updates.due_date = dueDate ? new Date(dueDate).toISOString() : null;
+    if (priority !== undefined) updates.priority = priority;
+    if (linkedTransactionId !== undefined) updates.linked_transaction_id = linkedTransactionId;
+    if (isCompleted !== undefined) {
+      updates.is_completed = isCompleted;
+      updates.completed_at = isCompleted ? new Date().toISOString() : null;
+    }
+    updates.updated_at = new Date().toISOString();
+
+    const { data, error } = await supabase
+      .from('tasks')
+      .update(updates)
+      .match({ id, user_id: userId })
+      .is('deleted_at', null)
+      .select()
+      .single();
+
+    if (error) {
+      return response.status(400).json({ message: error.message });
+    }
+
+    return response.json(data);
+  }
+
   async toggle(request: Request, response: Response) {
     const { id: userId } = request.user;
     const { id } = request.params;
@@ -51,17 +107,21 @@ export class TaskController {
       .from('tasks')
       .select('is_completed')
       .match({ id, user_id: userId })
+      .is('deleted_at', null)
       .single();
 
     if (fetchError || !task) {
-      return response.status(404).json({ message: 'Task not found' });
+      return response.status(404).json({ message: 'Tarefa não encontrada' });
     }
+
+    const nextCompleted = !task.is_completed;
 
     const { data, error } = await supabase
       .from('tasks')
       .update({
-        is_completed: !task.is_completed,
-        updated_at: new Date(),
+        is_completed: nextCompleted,
+        completed_at: nextCompleted ? new Date().toISOString() : null,
+        updated_at: new Date().toISOString(),
       })
       .match({ id, user_id: userId })
       .select()
@@ -72,5 +132,24 @@ export class TaskController {
     }
 
     return response.json(data);
+  }
+
+  async delete(request: Request, response: Response) {
+    const { id: userId } = request.user;
+    const { id } = request.params;
+
+    const { error } = await supabase
+      .from('tasks')
+      .update({
+        deleted_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .match({ id, user_id: userId });
+
+    if (error) {
+      return response.status(400).json({ message: error.message });
+    }
+
+    return response.status(204).send();
   }
 }

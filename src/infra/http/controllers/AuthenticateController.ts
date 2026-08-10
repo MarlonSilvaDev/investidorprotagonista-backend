@@ -7,7 +7,10 @@ import {
 import {
   isValidEmail,
   normalizeCpf,
+  normalizeCnpj,
   validateCpf,
+  validateCnpj,
+  validateDocument,
   validatePassword,
 } from '../../../core/utils/AuthValidation';
 import {
@@ -48,9 +51,10 @@ async function getProfileByUserId(userId: string) {
 }
 
 async function getProfileByEmail(email: string) {
+  if (!email) return null;
   const { data, error } = await supabaseAdmin
     .from('profiles')
-    .select('id, email, name, email_registrado, provider_type, role, cpf')
+    .select('id, email, name, email_registrado, provider_type, role, cpf, document_number')
     .eq('email', email)
     .maybeSingle();
 
@@ -60,11 +64,20 @@ async function getProfileByEmail(email: string) {
   return data;
 }
 
-async function getProfileByCpf(cpf: string) {
+async function getProfileByDocument(documentNumber: string, cpf?: string) {
+  const doc = documentNumber || cpf;
+  if (!doc) return null;
+
+  const filters: string[] = [];
+  if (documentNumber) filters.push(`document_number.eq.${documentNumber}`);
+  if (cpf) filters.push(`cpf.eq.${cpf}`);
+  if (documentNumber) filters.push(`cpf.eq.${documentNumber}`);
+
+  const uniqueFilters = [...new Set(filters)].join(',');
   const { data, error } = await supabaseAdmin
     .from('profiles')
-    .select('id, email, name, email_registrado, provider_type, role, cpf')
-    .eq('cpf', cpf)
+    .select('id, email, name, email_registrado, provider_type, role, cpf, document_number')
+    .or(uniqueFilters)
     .maybeSingle();
 
   if (error) {
@@ -82,7 +95,20 @@ export class AuthenticateController {
     const name = String(request.body.name || '').trim();
     const phone = String(request.body.phone || '').trim();
     const nickname = String(request.body.nickname || '').trim();
-    const cpf = normalizeCpf(String(request.body.cpf || ''));
+    const userType = String(request.body.userType || 'usuario').trim().toLowerCase();
+    const country = String(request.body.country || 'BR').trim().toUpperCase();
+    const documentType = String(
+      request.body.documentType || (userType === 'empresa' ? 'cnpj' : 'cpf')
+    ).trim().toLowerCase();
+
+    const rawDoc = String(
+      request.body.documentNumber || request.body.cpf || request.body.cnpj || ''
+    );
+    const isBrasil = country === 'BR';
+    const documentNumber = isBrasil
+      ? (userType === 'empresa' ? normalizeCnpj(rawDoc) : normalizeCpf(rawDoc))
+      : rawDoc.trim();
+    const cpf = isBrasil && userType === 'usuario' ? documentNumber : normalizeCpf(rawDoc);
 
     if (!isValidEmail(email)) {
       return response.status(400).json({ message: 'E-mail inválido' });
@@ -93,21 +119,32 @@ export class AuthenticateController {
     if (!phone) {
       return response.status(400).json({ message: 'Celular é obrigatório' });
     }
-    const cpfError = validateCpf(cpf);
-    if (cpfError) {
-      return response.status(400).json({ message: cpfError });
+    const docError = validateDocument(country, userType, documentNumber);
+    if (docError) {
+      return response.status(400).json({ message: docError });
     }
     const passwordError = validatePassword(password);
     if (passwordError) {
       return response.status(400).json({ message: passwordError });
     }
 
-    // CPF é o identificador único da conta
-    const existingByCpf = await getProfileByCpf(cpf);
-    if (existingByCpf) {
+    // 1. Valida se o e-mail já possui cadastro (1 conta por usuário)
+    const existingByEmail = await getProfileByEmail(email);
+    if (existingByEmail) {
       return response.status(409).json({
-        message: 'Já existe uma conta cadastrada com este CPF',
+        message: 'Já existe uma conta cadastrada com este e-mail',
       });
+    }
+
+    // 2. Valida se o documento (CPF / CNPJ / Documento) já possui cadastro
+    if (documentNumber || cpf) {
+      const existingByDoc = await getProfileByDocument(documentNumber, cpf || undefined);
+      if (existingByDoc) {
+        const docLabel = country === 'BR' ? (userType === 'empresa' ? 'CNPJ' : 'CPF') : 'documento';
+        return response.status(409).json({
+          message: `Já existe uma conta cadastrada com este ${docLabel}`,
+        });
+      }
     }
 
     // Auth do Supabase sem fluxo de e-mail dele.
@@ -116,7 +153,7 @@ export class AuthenticateController {
       email,
       password,
       email_confirm: true,
-      user_metadata: { name, phone, nickname, cpf },
+      user_metadata: { name, phone, nickname, cpf, country, userType, documentType, documentNumber },
     });
 
     if (error || !data.user) {
@@ -134,18 +171,22 @@ export class AuthenticateController {
         email,
         phone_number: phone,
         nickname,
-        cpf,
+        user_type: userType,
+        country,
+        document_type: documentType,
+        document_number: documentNumber,
+        cpf: cpf || null,
       })
       .eq('id', data.user.id);
 
     if (profileError) {
       await supabaseAdmin.auth.admin.deleteUser(data.user.id);
-      const isDuplicateCpf =
+      const isDuplicate =
         profileError.code === '23505' ||
-        /cpf|unique/i.test(profileError.message || '');
-      return response.status(isDuplicateCpf ? 409 : 400).json({
-        message: isDuplicateCpf
-          ? 'Já existe uma conta cadastrada com este CPF'
+        /cpf|document|email|unique/i.test(profileError.message || '');
+      return response.status(isDuplicate ? 409 : 400).json({
+        message: isDuplicate
+          ? 'Já existe uma conta cadastrada com estes dados (e-mail ou documento)'
           : profileError.message || 'Não foi possível criar a conta',
       });
     }
@@ -526,7 +567,7 @@ export class AuthenticateController {
     }
 
     // Verifica se já existe perfil com este e-mail
-    const existingProfile = await getProfileByEmail(data.user.email);
+    const existingProfile = await getProfileByEmail(data.user.email || '');
 
     if (existingProfile && existingProfile.provider_type === 'google') {
       // Já é conta Google: apenas faz login (atualiza flags)
