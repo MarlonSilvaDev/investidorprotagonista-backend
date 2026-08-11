@@ -1,1 +1,0 @@
-{"version":3,"file":"investment.routes.js","sourceRoot":"","sources":["investment.routes.ts"],"names":[],"mappings":";;;AAAA,qCAAiC;AACjC,8EAA2E;AAE3E,MAAM,gBAAgB,GAAG,IAAA,gBAAM,GAAE,CAAC;AAMzB,4CAAgB;AALzB,MAAM,oBAAoB,GAAG,IAAI,2CAAoB,EAAE,CAAC;AAExD,gBAAgB,CAAC,GAAG,CAAC,GAAG,EAAE,oBAAoB,CAAC,IAAI,CAAC,CAAC;AACrD,gBAAgB,CAAC,IAAI,CAAC,OAAO,EAAE,oBAAoB,CAAC,IAAI,CAAC,CAAC"}

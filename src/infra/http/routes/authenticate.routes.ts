@@ -62,6 +62,12 @@ authenticateRoutes.post('/register', decryptAuthCredentials, (req, res) =>
 authenticateRoutes.post('/verify-sms', decryptAuthCredentials, (req, res) =>
   authenticateController.verifySms(req, res)
 );
+authenticateRoutes.post('/resend-verification-code', decryptAuthCredentials, (req, res) =>
+  authenticateController.sendVerificationCode(req, res)
+);
+authenticateRoutes.post('/send-verification-code', decryptAuthCredentials, (req, res) =>
+  authenticateController.sendVerificationCode(req, res)
+);
 authenticateRoutes.post('/forgot-password', decryptAuthCredentials, (req, res) =>
   authenticateController.forgotPassword(req, res)
 );

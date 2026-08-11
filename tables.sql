@@ -52,8 +52,10 @@ ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS notification_time text,
   ADD COLUMN IF NOT EXISTS whatsapp_session_state text,
   ADD COLUMN IF NOT EXISTS email_registrado boolean,
-  ADD COLUMN IF NOT EXISTS provider_type text,
-  ADD COLUMN IF NOT EXISTS role text,
+  ADD COLUMN IF NOT EXISTS user_type text DEFAULT 'usuario',
+  ADD COLUMN IF NOT EXISTS country text DEFAULT 'BR',
+  ADD COLUMN IF NOT EXISTS document_type text,
+  ADD COLUMN IF NOT EXISTS document_number text,
   ADD COLUMN IF NOT EXISTS created_at timestamptz,
   ADD COLUMN IF NOT EXISTS updated_at timestamptz;
 

@@ -17,6 +17,7 @@ import {
   sendConfirmationEmail,
   sendPasswordResetEmail,
 } from '../../../core/utils/MailService';
+import { sendVerificationCode, type VerificationChannel } from '../../../core/utils/SmsService';
 import { resolveLocale } from '../../../core/utils/i18n';
 import { renderEmailConfirmedPage } from '../pages/emailConfirmedPage';
 import { renderEmailLinkErrorPage } from '../pages/emailLinkErrorPage';
@@ -54,7 +55,7 @@ async function getProfileByEmail(email: string) {
   if (!email) return null;
   const { data, error } = await supabaseAdmin
     .from('profiles')
-    .select('id, email, name, email_registrado, provider_type, role, cpf, document_number')
+    .select('id, email, name, phone_number, email_registrado, provider_type, role, cpf, document_number')
     .eq('email', email)
     .maybeSingle();
 
@@ -96,6 +97,9 @@ export class AuthenticateController {
     const phone = String(request.body.phone || '').trim();
     const nickname = String(request.body.nickname || '').trim();
     const userType = String(request.body.userType || 'usuario').trim().toLowerCase();
+    const verificationChannel = (
+      request.body.verificationChannel || request.body.channel || 'whatsapp'
+    ).toString().toLowerCase() as VerificationChannel;
     const country = String(request.body.country || 'BR').trim().toUpperCase();
     const documentType = String(
       request.body.documentType || (userType === 'empresa' ? 'cnpj' : 'cpf')
@@ -162,24 +166,45 @@ export class AuthenticateController {
       });
     }
 
-    // Garante flag false e grava CPF/nickname/phone no profile
-    const { error: profileError } = await supabaseAdmin
+    // 3. Tenta salvar o perfil em public.profiles
+    const profilePayload: Record<string, any> = {
+      id: data.user.id,
+      email_registrado: false,
+      name,
+      email,
+      phone_number: phone,
+      nickname,
+      user_type: userType,
+      country,
+      document_type: documentType,
+      document_number: documentNumber,
+      cpf: cpf || (country === 'BR' && userType === 'usuario' ? documentNumber : null),
+    };
+
+    let { error: profileError } = await supabaseAdmin
       .from('profiles')
-      .update({
+      .upsert(profilePayload, { onConflict: 'id' });
+
+    // Fallback: Se o banco do Supabase remoto ainda não tiver as colunas estendidas
+    if (profileError && /column|schema|does not exist/i.test(profileError.message || '')) {
+      console.warn('[REGISTER WARNING] Colunas estendidas não encontradas em profiles, tentando payload base:', profileError.message);
+      const basePayload = {
+        id: data.user.id,
         email_registrado: false,
         name,
         email,
         phone_number: phone,
         nickname,
-        user_type: userType,
-        country,
-        document_type: documentType,
-        document_number: documentNumber,
-        cpf: cpf || null,
-      })
-      .eq('id', data.user.id);
+        cpf: cpf || (country === 'BR' && userType === 'usuario' ? documentNumber : null),
+      };
+      const fallback = await supabaseAdmin
+        .from('profiles')
+        .upsert(basePayload, { onConflict: 'id' });
+      profileError = fallback.error;
+    }
 
     if (profileError) {
+      console.error('[REGISTER PROFILE ERROR]', profileError);
       await supabaseAdmin.auth.admin.deleteUser(data.user.id);
       const isDuplicate =
         profileError.code === '23505' ||
@@ -199,10 +224,16 @@ export class AuthenticateController {
       email,
       phone,
       code: smsCode,
+      channel: verificationChannel,
     });
 
-    console.log(`[SMS MOCK] Enviando código ${smsCode} para ${phone}`);
-    // Aqui seria a integração com um serviço real de SMS (Twilio, AWS SNS, etc.)
+    // Envia o código através do canal selecionado (whatsapp, telegram, signal, sms)
+    await sendVerificationCode({
+      to: phone,
+      code: smsCode,
+      channel: verificationChannel,
+      locale: request.body.locale,
+    });
 
     return response.status(201).json({
       id: data.user.id,
@@ -266,6 +297,60 @@ export class AuthenticateController {
       },
       // O front deve redirecionar para o login após esta mensagem
       requires_login: true
+    });
+  }
+
+  async sendVerificationCode(request: Request, response: Response) {
+    const email = String(request.body.email || '').trim().toLowerCase();
+    const channel = (request.body.verificationChannel || request.body.channel || 'whatsapp')
+      .toString()
+      .toLowerCase() as VerificationChannel;
+
+    if (!email) {
+      return response.status(400).json({ message: 'E-mail é obrigatório' });
+    }
+
+    const profile = await getProfileByEmail(email);
+    const { data: recentVerif } = await supabaseAdmin
+      .from('sms_verifications')
+      .select('phone')
+      .eq('email', email)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const phone = profile?.phone_number || recentVerif?.phone;
+
+    if (!phone) {
+      return response.status(404).json({ message: 'Telefone do usuário não encontrado' });
+    }
+
+    const smsCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+    await supabaseAdmin.from('sms_verifications').insert({
+      email,
+      phone,
+      code: smsCode,
+      channel,
+    });
+
+    await sendVerificationCode({
+      to: phone,
+      code: smsCode,
+      channel,
+      locale: request.body.locale,
+    });
+
+    const channelLabels: Record<string, string> = {
+      whatsapp: 'WhatsApp',
+      sms: 'SMS',
+      telegram: 'Telegram',
+      signal: 'Signal',
+    };
+
+    return response.json({
+      message: `Código enviado via ${channelLabels[channel] || channel}!`,
+      channel,
     });
   }
 
@@ -646,7 +731,7 @@ export class AuthenticateController {
       });
     }
 
-    const existingByCpf = await getProfileByCpf(cpf);
+    const existingByCpf = await getProfileByDocument(cpf, cpf);
     if (existingByCpf && existingByCpf.id !== userId) {
       return response.status(409).json({
         message: 'Já existe uma conta cadastrada com este CPF',

@@ -30,7 +30,9 @@ export async function ensureAdmin(
       return response.status(403).json({ message: 'Acesso restrito a administradores' });
     }
 
-    request.user.role = 'administrador';
+    if (request.user) {
+      request.user.role = 'administrador';
+    }
     return next();
   } catch {
     return response.status(500).json({ message: 'Erro ao verificar permissões' });
