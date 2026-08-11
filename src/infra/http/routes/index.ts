@@ -8,7 +8,7 @@ import { cardRoutes } from './card.routes';
 import { subscriptionRoutes } from './subscription.routes';
 import { paymentRoutes } from './payment.routes';
 import { integrationRoutes, openFinanceController } from './integration.routes';
-import { IntegrationController } from '../controllers/IntegrationController';
+import { IntegrationController } from '../../controllers/IntegrationController';
 import { dashboardRoutes } from './dashboard.routes';
 import { syncRoutes } from './sync.routes';
 import { analyticsRoutes } from './analytics.routes';

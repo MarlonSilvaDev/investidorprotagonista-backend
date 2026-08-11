@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { DashboardController } from '../controllers/DashboardController';
+import { DashboardController } from '../../controllers/DashboardController';
 import { ensureAuthenticated } from '../middlewares/ensureAuthenticated';
 import { checkLicensing } from '../middlewares/checkLicensing';
 

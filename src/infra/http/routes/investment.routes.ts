@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { InvestmentController } from '../controllers/InvestmentController';
+import { InvestmentController } from '../../controllers/InvestmentController';
 
 const investmentRoutes = Router();
 const investmentController = new InvestmentController();

@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { IntegrationController } from '../controllers/IntegrationController';
-import { OpenFinanceController } from '../controllers/OpenFinanceController';
+import { IntegrationController } from '../../controllers/IntegrationController';
+import { OpenFinanceController } from '../../controllers/OpenFinanceController';
 import { ensureAuthenticated } from '../middlewares/ensureAuthenticated';
 import { checkLicensing } from '../middlewares/checkLicensing';
 

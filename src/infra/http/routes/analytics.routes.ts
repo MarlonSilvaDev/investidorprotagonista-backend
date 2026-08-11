@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { AnalyticsController } from '../controllers/AnalyticsController';
+import { AnalyticsController } from '../../controllers/AnalyticsController';
 import { supabase } from '../../database/supabase';
 
 const analyticsRoutes = Router();
@@ -16,7 +16,8 @@ async function optionalAuth(request: Request, _response: Response, next: NextFun
   try {
     const { data } = await supabase.auth.getUser(token);
     if (data.user) {
-      request.user = { id: data.user.id };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      request.user = { id: data.user.id } as any;
     }
   } catch {
     // Ignora token inválido em analytics.

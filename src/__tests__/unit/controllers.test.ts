@@ -12,7 +12,7 @@ vi.mock('../../database/supabase', () => ({
 
 // ─── DASHBOARD CONTROLLER ───
 
-import { DashboardController } from '../../infra/http/controllers/DashboardController';
+import { DashboardController } from '../../infra/controllers/DashboardController';
 import { Request, Response } from 'express';
 
 function createMockRequestAndResponse(overrides: any = {}) {
@@ -256,7 +256,7 @@ describe('DashboardController', () => {
 
 // ─── TRANSACTION CONTROLLER ───
 
-import { TransactionController } from '../../infra/http/controllers/TransactionController';
+import { TransactionController } from '../../infra/controllers/TransactionController';
 
 describe('TransactionController', () => {
   let controller: TransactionController;
@@ -392,7 +392,7 @@ describe('TransactionController', () => {
 
 // ─── GOAL CONTROLLER ───
 
-import { GoalController } from '../../infra/http/controllers/GoalController';
+import { GoalController } from '../../infra/controllers/GoalController';
 
 describe('GoalController', () => {
   let controller: GoalController;
@@ -517,7 +517,7 @@ describe('GoalController', () => {
 
 // ─── INVESTMENT CONTROLLER ───
 
-import { InvestmentController } from '../../infra/http/controllers/InvestmentController';
+import { InvestmentController } from '../../infra/controllers/InvestmentController';
 
 describe('InvestmentController', () => {
   let controller: InvestmentController;
@@ -604,7 +604,7 @@ describe('InvestmentController', () => {
 
 // ─── CARD CONTROLLER ───
 
-import { CardController } from '../../infra/http/controllers/CardController';
+import { CardController } from '../../infra/controllers/CardController';
 
 describe('CardController', () => {
   let controller: CardController;
@@ -671,7 +671,7 @@ describe('CardController', () => {
 
 // ─── SUBSCRIPTION CONTROLLER ───
 
-import { SubscriptionController } from '../../infra/http/controllers/SubscriptionController';
+import { SubscriptionController } from '../../infra/controllers/SubscriptionController';
 
 describe('SubscriptionController', () => {
   let controller: SubscriptionController;
@@ -734,7 +734,7 @@ describe('SubscriptionController', () => {
 
 // ─── TASK CONTROLLER ───
 
-import { TaskController } from '../../infra/http/controllers/TaskController';
+import { TaskController } from '../../infra/controllers/TaskController';
 
 describe('TaskController', () => {
   let controller: TaskController;
@@ -845,7 +845,7 @@ describe('TaskController', () => {
 
 // ─── ANALYTICS CONTROLLER ───
 
-import { AnalyticsController } from '../../infra/http/controllers/AnalyticsController';
+import { AnalyticsController } from '../../infra/controllers/AnalyticsController';
 
 describe('AnalyticsController', () => {
   let controller: AnalyticsController;
@@ -896,7 +896,7 @@ describe('AnalyticsController', () => {
 
 // ─── PAYMENT CONTROLLER ───
 
-import { PaymentController } from '../../infra/http/controllers/PaymentController';
+import { PaymentController } from '../../infra/controllers/PaymentController';
 
 describe('PaymentController', () => {
   let controller: PaymentController;

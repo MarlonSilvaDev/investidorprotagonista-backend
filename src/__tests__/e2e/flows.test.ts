@@ -28,7 +28,7 @@ vi.mock('../../core/utils/MailService', () => ({
 
 import express from 'express';
 import request from 'supertest';
-import { AuthenticateController } from '../../infra/http/controllers/AuthenticateController';
+import { AuthenticateController } from '../../infra/controllers/AuthenticateController';
 
 const mockUser = {
   id: 'user-e2e-test',
@@ -451,11 +451,16 @@ describe('End-to-End Flows', () => {
       expect(pushRes.body.results.every((r: any) => r.status === 'applied')).toBe(true);
 
       // Pull
-      mockSupabase.from.mockImplementation(() => ({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        gt: vi.fn().mockReturnThis(),
-      }).mockResolvedValue({ data: [], error: null }));
+      mockSupabase.from.mockImplementation(() => {
+        const resolved = { data: [], error: null };
+        const chain: any = {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          gt: vi.fn().mockReturnThis(),
+          then: (resolve: any) => Promise.resolve(resolved).then(resolve),
+        };
+        return chain;
+      });
 
       const pullRes = await request(app)
         .get('/sync/pull?since=2025-01-01T00:00:00Z')

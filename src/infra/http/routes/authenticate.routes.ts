@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import express from 'express';
-import { AuthenticateController } from '../controllers/AuthenticateController';
+import { AuthenticateController } from '../../controllers/AuthenticateController';
 import { decryptAuthCredentials } from '../middlewares/decryptAuthCredentials';
 import { ensureAuthenticated } from '../middlewares/ensureAuthenticated';
 import { renderEmailConfirmedPage } from '../pages/emailConfirmedPage';

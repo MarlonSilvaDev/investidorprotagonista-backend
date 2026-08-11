@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { SharedAccountController } from '../controllers/SharedAccountController';
+import { SharedAccountController } from '../../controllers/SharedAccountController';
 
 const sharedRoutes = Router();
 const sharedAccountController = new SharedAccountController();

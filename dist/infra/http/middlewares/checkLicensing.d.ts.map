@@ -1,0 +1,1 @@
+{"version":3,"file":"checkLicensing.d.ts","sourceRoot":"","sources":["../../../../src/infra/http/middlewares/checkLicensing.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,OAAO,EAAE,QAAQ,EAAE,YAAY,EAAE,MAAM,SAAS,CAAC;AAK1D,wBAAsB,cAAc,CAClC,OAAO,EAAE,OAAO,EAChB,QAAQ,EAAE,QAAQ,EAClB,IAAI,EAAE,YAAY,sDA2DnB"}
