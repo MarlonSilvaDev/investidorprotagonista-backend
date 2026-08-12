@@ -20,11 +20,12 @@ async function ensureAdmin(request, response, next) {
         if (error) {
             return response.status(500).json({ message: error.message });
         }
-        if (!profile || profile.role !== 'administrador') {
+        const isAdmin = profile?.role === 'administrador' || profile?.role === 'admin';
+        if (!profile || !isAdmin) {
             return response.status(403).json({ message: 'Acesso restrito a administradores' });
         }
         if (request.user) {
-            request.user.role = 'administrador';
+            request.user.role = profile.role;
         }
         return next();
     }

@@ -12,8 +12,10 @@ const cors_1 = __importDefault(require("cors"));
 const routes_1 = require("./routes");
 const errorHandler_1 = require("./shared/middlewares/errorHandler");
 const emailLinkErrorPage_1 = require("./shared/utils/htmlpages/emailLinkErrorPage");
+const rateLimiters_1 = require("./shared/middlewares/rateLimiters");
 const app = (0, express_1.default)();
 exports.app = app;
+app.use(rateLimiters_1.generalLimiter);
 app.use((0, cors_1.default)({
     origin: true,
     credentials: true,
