@@ -4,22 +4,28 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const vitest_1 = require("vitest");
+const express_1 = __importDefault(require("express"));
+const supertest_1 = __importDefault(require("supertest"));
+const routes_1 = require("../../routes");
+const AuthTokenService_1 = require("../../core/utils/AuthTokenService");
 // ─── MOCK SUPABASE ───
-const mockSupabase = {
-    auth: {
-        getUser: vitest_1.vi.fn(),
-        signInWithPassword: vitest_1.vi.fn(),
-        admin: {
-            createUser: vitest_1.vi.fn(),
-            updateUserById: vitest_1.vi.fn(),
-            getUserById: vitest_1.vi.fn(),
+const { mockSupabase } = vitest_1.vi.hoisted(() => ({
+    mockSupabase: {
+        auth: {
+            getUser: vitest_1.vi.fn(),
+            signInWithPassword: vitest_1.vi.fn(),
+            admin: {
+                createUser: vitest_1.vi.fn(),
+                updateUserById: vitest_1.vi.fn(),
+                getUserById: vitest_1.vi.fn(),
+            },
+            signInWithIdToken: vitest_1.vi.fn(),
+            refreshSession: vitest_1.vi.fn(),
         },
-        signInWithIdToken: vitest_1.vi.fn(),
-        refreshSession: vitest_1.vi.fn(),
+        from: vitest_1.vi.fn(),
     },
-    from: vitest_1.vi.fn(),
-};
-vitest_1.vi.mock('../../database/supabase', () => ({
+}));
+vitest_1.vi.mock('../../config/supabase', () => ({
     supabase: mockSupabase,
     supabaseAdmin: mockSupabase,
 }));
@@ -27,8 +33,25 @@ vitest_1.vi.mock('../../core/utils/MailService', () => ({
     sendConfirmationEmail: vitest_1.vi.fn().mockResolvedValue(undefined),
     sendPasswordResetEmail: vitest_1.vi.fn().mockResolvedValue(undefined),
 }));
-const express_1 = __importDefault(require("express"));
-const supertest_1 = __importDefault(require("supertest"));
+vitest_1.vi.mock('stripe', () => {
+    const StripeMock = vitest_1.vi.fn().mockImplementation(() => ({
+        customers: {
+            create: vitest_1.vi.fn().mockResolvedValue({ id: 'cus_mock123' }),
+        },
+        checkout: {
+            sessions: {
+                create: vitest_1.vi.fn().mockResolvedValue({ url: 'https://checkout.stripe.com/mock' }),
+            },
+        },
+        webhooks: {
+            constructEvent: vitest_1.vi.fn().mockReturnValue({ type: 'checkout.session.completed', data: { object: { metadata: { userId: 'user-1' }, subscription: 'sub_mock', current_period_end: Math.floor(Date.now() / 1000) + 2592000 } } }),
+        },
+        subscriptions: {
+            retrieve: vitest_1.vi.fn().mockResolvedValue({ current_period_end: Math.floor(Date.now() / 1000) + 2592000 }),
+        },
+    }));
+    return { default: StripeMock };
+});
 const mockUser = {
     id: 'user-e2e-test',
     email: 'e2e@example.com',
@@ -37,8 +60,8 @@ const mockToken = 'mock-jwt-e2e';
 function buildApp() {
     const app = (0, express_1.default)();
     app.use(express_1.default.json());
-    const { routes } = require('../../infra/http/routes');
-    app.use(routes);
+    app.use(routes_1.routes);
+    app.use((err, _req, res, _next) => { console.error('FLOW_ERROR', err); res.status(500).json({ message: String(err?.message || err) }); });
     return app;
 }
 (0, vitest_1.describe)('End-to-End Flows', () => {
@@ -69,18 +92,27 @@ function buildApp() {
             provider_type: 'email',
         };
         mockSupabase.from.mockImplementation((table) => {
+            const defaultRecord = { id: mockUser.id, user_id: mockUser.id, subscription_status: 'active', subscription_expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString() };
             const chain = {
                 select: vitest_1.vi.fn().mockReturnThis(),
                 eq: vitest_1.vi.fn().mockReturnThis(),
-                maybeSingle: vitest_1.vi.fn().mockResolvedValue({ data: validProfile, error: null }),
-                single: vitest_1.vi.fn().mockResolvedValue({ data: validProfile, error: null }),
-                update: vitest_1.vi.fn().mockReturnThis(),
-                match: vitest_1.vi.fn().mockResolvedValue({ error: null }),
-                insert: vitest_1.vi.fn().mockReturnThis(),
-                delete: vitest_1.vi.fn().mockReturnThis(),
+                neq: vitest_1.vi.fn().mockReturnThis(),
+                is: vitest_1.vi.fn().mockReturnThis(),
+                in: vitest_1.vi.fn().mockReturnThis(),
+                not: vitest_1.vi.fn().mockReturnThis(),
+                or: vitest_1.vi.fn().mockReturnThis(),
                 order: vitest_1.vi.fn().mockReturnThis(),
                 gt: vitest_1.vi.fn().mockReturnThis(),
+                gte: vitest_1.vi.fn().mockReturnThis(),
+                lte: vitest_1.vi.fn().mockReturnThis(),
+                match: vitest_1.vi.fn().mockReturnThis(),
+                maybeSingle: vitest_1.vi.fn().mockResolvedValue({ data: defaultRecord, error: null }),
+                single: vitest_1.vi.fn().mockResolvedValue({ data: defaultRecord, error: null }),
+                update: vitest_1.vi.fn().mockReturnThis(),
+                insert: vitest_1.vi.fn().mockReturnThis(),
+                delete: vitest_1.vi.fn().mockReturnThis(),
                 upsert: vitest_1.vi.fn().mockReturnThis(),
+                then: (resolve) => resolve({ data: [defaultRecord], error: null }),
             };
             return chain;
         });
@@ -92,14 +124,21 @@ function buildApp() {
                 data: { user: { id: 'new-user', email: 'new@example.com', user_metadata: { name: 'New User' } } },
                 error: null,
             });
+            const emptyProfileBuilder = () => ({
+                select: vitest_1.vi.fn().mockReturnThis(),
+                eq: vitest_1.vi.fn().mockReturnThis(),
+                or: vitest_1.vi.fn().mockReturnThis(),
+                maybeSingle: vitest_1.vi.fn().mockResolvedValue({ data: null, error: null }),
+                upsert: vitest_1.vi.fn().mockResolvedValue({ error: null }),
+            });
+            mockSupabase.from.mockReturnValueOnce(emptyProfileBuilder()).mockReturnValueOnce(emptyProfileBuilder());
             const registerRes = await (0, supertest_1.default)(app)
                 .post('/auth/register')
-                .send({ name: 'New User', email: 'new@example.com', password: 'SecurePass1@' });
+                .send({ name: 'New User', documentNumber: '52998224725', phone: '11999999999', email: 'new@example.com', password: 'SecurePass1@' });
             (0, vitest_1.expect)(registerRes.status).toBe(201);
             const newUserId = registerRes.body.id;
             // Step 2: Confirm email
-            const { signAuthMailToken } = require('../../core/utils/AuthTokenService');
-            const confirmToken = signAuthMailToken({
+            const confirmToken = (0, AuthTokenService_1.signAuthMailToken)({
                 sub: newUserId,
                 email: 'new@example.com',
                 type: 'email_confirm',
@@ -107,7 +146,7 @@ function buildApp() {
             const confirmRes = await (0, supertest_1.default)(app)
                 .get(`/auth/confirm-email?token=${confirmToken}`);
             (0, vitest_1.expect)(confirmRes.status).toBe(200);
-            (0, vitest_1.expect)(confirmRes.text).toContain('Confirmado');
+            (0, vitest_1.expect)(confirmRes.text).toMatch(/confirmado/i);
             // Step 3: Login
             mockSupabase.auth.signInWithPassword.mockResolvedValue({
                 data: {
@@ -125,13 +164,14 @@ function buildApp() {
             mockSupabase.from.mockImplementation(() => ({
                 select: vitest_1.vi.fn().mockReturnThis(),
                 eq: vitest_1.vi.fn().mockReturnThis(),
+                is: vitest_1.vi.fn().mockReturnThis(),
+                order: vitest_1.vi.fn().mockResolvedValue({ data: [], error: null }),
                 maybeSingle: vitest_1.vi.fn().mockResolvedValue({ data: updatedProfile, error: null }),
                 single: vitest_1.vi.fn().mockResolvedValue({ data: updatedProfile, error: null }),
                 update: vitest_1.vi.fn().mockReturnThis(),
                 match: vitest_1.vi.fn().mockResolvedValue({ error: null }),
                 insert: vitest_1.vi.fn().mockReturnThis(),
                 delete: vitest_1.vi.fn().mockReturnThis(),
-                order: vitest_1.vi.fn().mockReturnThis(),
                 gt: vitest_1.vi.fn().mockReturnThis(),
                 upsert: vitest_1.vi.fn().mockReturnThis(),
             }));
@@ -151,7 +191,6 @@ function buildApp() {
             (0, vitest_1.expect)([200, 402]).toContain(protectedRes.status); // 200 if licensed, 402 if not
         });
         (0, vitest_1.it)('should handle full password reset flow', async () => {
-            const { signAuthMailToken } = require('../../core/utils/AuthTokenService');
             // Step 1: Forgot password
             mockSupabase.from.mockImplementation(() => ({
                 select: vitest_1.vi.fn().mockReturnThis(),
@@ -168,7 +207,6 @@ function buildApp() {
                 match: vitest_1.vi.fn().mockResolvedValue({ error: null }),
                 insert: vitest_1.vi.fn().mockReturnThis(),
                 delete: vitest_1.vi.fn().mockReturnThis(),
-                order: vitest_1.vi.fn().mockReturnThis(),
                 gt: vitest_1.vi.fn().mockReturnThis(),
                 upsert: vitest_1.vi.fn().mockReturnThis(),
             }));
@@ -177,7 +215,7 @@ function buildApp() {
                 .send({ email: 'e2e@example.com', locale: 'pt-BR' });
             (0, vitest_1.expect)(forgotRes.status).toBe(200);
             // Step 2: Generate reset token
-            const resetToken = signAuthMailToken({
+            const resetToken = (0, AuthTokenService_1.signAuthMailToken)({
                 sub: userId,
                 email: 'e2e@example.com',
                 type: 'password_reset',
@@ -216,6 +254,7 @@ function buildApp() {
             mockSupabase.from.mockImplementation(() => ({
                 select: vitest_1.vi.fn().mockReturnThis(),
                 eq: vitest_1.vi.fn().mockReturnThis(),
+                maybeSingle: vitest_1.vi.fn().mockResolvedValue({ data: { id: mockUser.id, subscription_status: 'active', subscription_expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString() }, error: null }),
                 single: vitest_1.vi.fn().mockResolvedValue({ data: transactionData, error: null }),
                 insert: vitest_1.vi.fn().mockReturnThis(),
                 delete: vitest_1.vi.fn().mockReturnThis(),
@@ -224,6 +263,7 @@ function buildApp() {
                 upsert: vitest_1.vi.fn().mockReturnThis(),
                 gt: vitest_1.vi.fn().mockReturnThis(),
             }));
+            mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: userId, email: mockUser.email } }, error: null });
             const createRes = await (0, supertest_1.default)(app)
                 .post('/transactions')
                 .set('Authorization', `Bearer ${authToken}`)
@@ -241,6 +281,7 @@ function buildApp() {
             mockSupabase.from.mockImplementation(() => ({
                 select: vitest_1.vi.fn().mockReturnThis(),
                 eq: vitest_1.vi.fn().mockReturnThis(),
+                maybeSingle: vitest_1.vi.fn().mockResolvedValue({ data: { id: mockUser.id, subscription_status: 'active', subscription_expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString() }, error: null }),
                 order: vitest_1.vi.fn().mockResolvedValue({ data: [transactionData], error: null }),
                 single: vitest_1.vi.fn().mockResolvedValue({ data: transactionData, error: null }),
                 insert: vitest_1.vi.fn().mockReturnThis(),
@@ -258,6 +299,7 @@ function buildApp() {
             mockSupabase.from.mockImplementation(() => ({
                 select: vitest_1.vi.fn().mockReturnThis(),
                 eq: vitest_1.vi.fn().mockReturnThis(),
+                maybeSingle: vitest_1.vi.fn().mockResolvedValue({ data: { id: mockUser.id, subscription_status: 'active', subscription_expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString() }, error: null }),
                 single: vitest_1.vi.fn().mockResolvedValue({ data: transactionData, error: null }),
                 insert: vitest_1.vi.fn().mockReturnThis(),
                 delete: vitest_1.vi.fn().mockReturnThis(),
@@ -285,6 +327,7 @@ function buildApp() {
             mockSupabase.from.mockImplementation(() => ({
                 select: vitest_1.vi.fn().mockReturnThis(),
                 eq: vitest_1.vi.fn().mockReturnThis(),
+                maybeSingle: vitest_1.vi.fn().mockResolvedValue({ data: { id: mockUser.id, subscription_status: 'active', subscription_expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString() }, error: null }),
                 single: vitest_1.vi.fn().mockResolvedValue({ data: goalData, error: null }),
                 insert: vitest_1.vi.fn().mockReturnThis(),
                 update: vitest_1.vi.fn().mockReturnThis(),
@@ -295,6 +338,7 @@ function buildApp() {
                 gt: vitest_1.vi.fn().mockReturnThis(),
             }));
             // Create
+            mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: userId, email: mockUser.email } }, error: null });
             const createRes = await (0, supertest_1.default)(app)
                 .post('/goals')
                 .set('Authorization', `Bearer ${authToken}`)
@@ -309,6 +353,7 @@ function buildApp() {
             mockSupabase.from.mockImplementation(() => ({
                 select: vitest_1.vi.fn().mockReturnThis(),
                 eq: vitest_1.vi.fn().mockReturnThis(),
+                maybeSingle: vitest_1.vi.fn().mockResolvedValue({ data: { id: mockUser.id, subscription_status: 'active', subscription_expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString() }, error: null }),
                 single: vitest_1.vi.fn().mockResolvedValue({ data: goalData, error: null }),
                 insert: vitest_1.vi.fn().mockReturnThis(),
                 update: vitest_1.vi.fn().mockReturnThis(),
@@ -327,7 +372,8 @@ function buildApp() {
             mockSupabase.from.mockImplementation(() => ({
                 select: vitest_1.vi.fn().mockReturnThis(),
                 eq: vitest_1.vi.fn().mockReturnThis(),
-                single: vitest_1.vi.fn().mockResolvedValue({ data: updatedGoal, error: null }),
+                maybeSingle: vitest_1.vi.fn().mockResolvedValue({ data: { id: mockUser.id, subscription_status: 'active', subscription_expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString() }, error: null }),
+                single: vitest_1.vi.fn().mockResolvedValue({ data: goalData, error: null }),
                 insert: vitest_1.vi.fn().mockReturnThis(),
                 update: vitest_1.vi.fn().mockReturnThis(),
                 match: vitest_1.vi.fn().mockResolvedValue({ data: updatedGoal, error: null }),
@@ -350,6 +396,7 @@ function buildApp() {
             mockSupabase.from.mockImplementation(() => ({
                 select: vitest_1.vi.fn().mockReturnThis(),
                 eq: vitest_1.vi.fn().mockReturnThis(),
+                maybeSingle: vitest_1.vi.fn().mockResolvedValue({ data: { id: mockUser.id, subscription_status: 'active', subscription_expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString() }, error: null }),
                 single: vitest_1.vi.fn().mockResolvedValue({
                     data: { id: 'tx-sync-1', updated_at: serverTime },
                     error: null,
@@ -399,6 +446,7 @@ function buildApp() {
                 const chain = {
                     select: vitest_1.vi.fn().mockReturnThis(),
                     eq: vitest_1.vi.fn().mockReturnThis(),
+                    maybeSingle: vitest_1.vi.fn().mockResolvedValue({ data: null, error: null }),
                     gt: vitest_1.vi.fn().mockReturnThis(),
                     then: (resolve) => Promise.resolve(resolved).then(resolve),
                 };
@@ -417,6 +465,7 @@ function buildApp() {
             mockSupabase.from.mockImplementation(() => ({
                 select: vitest_1.vi.fn().mockReturnThis(),
                 eq: vitest_1.vi.fn().mockReturnThis(),
+                maybeSingle: vitest_1.vi.fn().mockResolvedValue({ data: null, error: null }),
                 single: vitest_1.vi.fn().mockResolvedValue({
                     data: {
                         subscription_status: 'active',
@@ -429,7 +478,6 @@ function buildApp() {
                 match: vitest_1.vi.fn().mockResolvedValue({ error: null }),
                 insert: vitest_1.vi.fn().mockReturnThis(),
                 delete: vitest_1.vi.fn().mockReturnThis(),
-                order: vitest_1.vi.fn().mockReturnThis(),
                 upsert: vitest_1.vi.fn().mockReturnThis(),
                 gt: vitest_1.vi.fn().mockReturnThis(),
             }));
@@ -456,6 +504,7 @@ function buildApp() {
             mockSupabase.from.mockImplementation(() => ({
                 select: vitest_1.vi.fn().mockReturnThis(),
                 eq: vitest_1.vi.fn().mockReturnThis(),
+                maybeSingle: vitest_1.vi.fn().mockResolvedValue({ data: null, error: null }),
                 single: vitest_1.vi.fn().mockResolvedValue({
                     data: { email: mockUser.email, stripe_customer_id: null },
                     error: null,
@@ -464,7 +513,6 @@ function buildApp() {
                 match: vitest_1.vi.fn().mockResolvedValue({ error: null }),
                 insert: vitest_1.vi.fn().mockReturnThis(),
                 delete: vitest_1.vi.fn().mockReturnThis(),
-                order: vitest_1.vi.fn().mockReturnThis(),
                 upsert: vitest_1.vi.fn().mockReturnThis(),
                 gt: vitest_1.vi.fn().mockReturnThis(),
             }));
@@ -484,4 +532,24 @@ function buildApp() {
         });
     });
 });
+// Test requests use plain JSON; credential encryption is tested separately.
+vitest_1.vi.mock('../../shared/middlewares/decryptAuthCredentials', () => ({ decryptAuthCredentials: (_req, _res, next) => next() }));
+// Keep endpoint-specific E2E fixtures compatible with every protected middleware chain.
+const originalFromImplementation = mockSupabase.from.mockImplementation.bind(mockSupabase.from);
+mockSupabase.from.mockImplementation = ((factory) => originalFromImplementation((...args) => {
+    const value = factory(...args) || {};
+    return {
+        select: vitest_1.vi.fn().mockReturnThis(),
+        insert: vitest_1.vi.fn().mockReturnThis(),
+        update: vitest_1.vi.fn().mockReturnThis(),
+        delete: vitest_1.vi.fn().mockReturnThis(),
+        eq: vitest_1.vi.fn().mockReturnThis(),
+        is: vitest_1.vi.fn().mockReturnThis(),
+        or: vitest_1.vi.fn().mockReturnThis(),
+        order: vitest_1.vi.fn().mockReturnThis(),
+        single: vitest_1.vi.fn().mockResolvedValue({ data: null, error: null }),
+        maybeSingle: vitest_1.vi.fn().mockResolvedValue({ data: { id: mockUser.id, subscription_status: 'active', subscription_expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString() }, error: null }),
+        ...value,
+    };
+}));
 //# sourceMappingURL=flows.test.js.map

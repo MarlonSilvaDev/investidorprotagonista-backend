@@ -1,18 +1,44 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // ─── MOCK SUPABASE ───
-const mockSupabase = {
-  from: vi.fn(),
-};
+const { mockSupabase } = vi.hoisted(() => {
+  const createBuilder = () => {
+    const builder: any = {
+      select: vi.fn().mockImplementation(() => builder),
+      insert: vi.fn().mockImplementation(() => builder),
+      update: vi.fn().mockImplementation(() => builder),
+      delete: vi.fn().mockImplementation(() => builder),
+      eq: vi.fn().mockImplementation(() => builder),
+      neq: vi.fn().mockImplementation(() => builder),
+      is: vi.fn().mockImplementation(() => builder),
+      in: vi.fn().mockImplementation(() => builder),
+      not: vi.fn().mockImplementation(() => builder),
+      or: vi.fn().mockImplementation(() => builder),
+      gte: vi.fn().mockImplementation(() => builder),
+      lte: vi.fn().mockImplementation(() => builder),
+      match: vi.fn().mockImplementation(() => builder),
+      order: vi.fn().mockImplementation(() => builder),
+      single: vi.fn().mockResolvedValue({ data: null, error: null }),
+      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+    };
+    return builder;
+  };
+  return {
+    mockSupabase: {
+      from: vi.fn().mockImplementation(createBuilder),
+      createBuilder,
+    },
+  };
+});
 
-vi.mock('../../database/supabase', () => ({
+vi.mock('../../config/supabase', () => ({
   supabase: mockSupabase,
   supabaseAdmin: mockSupabase,
 }));
 
 // ─── DASHBOARD CONTROLLER ───
 
-import { DashboardController } from '../../infra/controllers/DashboardController';
+import { DashboardController } from '../../modules/dashboard/DashboardController';
 import { Request, Response } from 'express';
 
 function createMockRequestAndResponse(overrides: any = {}) {
@@ -35,6 +61,8 @@ describe('DashboardController', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSupabase.from.mockReset();
+    mockSupabase.from.mockImplementation(mockSupabase.createBuilder);
     controller = new DashboardController();
   });
 
@@ -59,25 +87,22 @@ describe('DashboardController', () => {
       mockSupabase.from
         .mockReturnValueOnce({
           select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-        })
-        .mockResolvedValueOnce({ data: mockTransactions });
+          eq: vi.fn().mockResolvedValueOnce({ data: mockTransactions }),
+      })
 
       // Mock investments query
       mockSupabase.from
         .mockReturnValueOnce({
           select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-        })
-        .mockResolvedValueOnce({ data: mockInvestments });
+          eq: vi.fn().mockResolvedValueOnce({ data: mockInvestments }),
+      })
 
       // Mock goals query
       mockSupabase.from
         .mockReturnValueOnce({
           select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-        })
-        .mockResolvedValueOnce({ data: mockGoals });
+          eq: vi.fn().mockResolvedValueOnce({ data: mockGoals }),
+      })
 
       const { mockReq, mockRes } = createMockRequestAndResponse();
 
@@ -104,23 +129,20 @@ describe('DashboardController', () => {
       mockSupabase.from
         .mockReturnValueOnce({
           select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-        })
-        .mockResolvedValueOnce({ data: [] });
+          eq: vi.fn().mockResolvedValueOnce({ data: [] }),
+      })
 
       mockSupabase.from
         .mockReturnValueOnce({
           select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-        })
-        .mockResolvedValueOnce({ data: [] });
+          eq: vi.fn().mockResolvedValueOnce({ data: [] }),
+      })
 
       mockSupabase.from
         .mockReturnValueOnce({
           select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-        })
-        .mockResolvedValueOnce({ data: [] });
+          eq: vi.fn().mockResolvedValueOnce({ data: [] }),
+      })
 
       const { mockReq, mockRes } = createMockRequestAndResponse();
 
@@ -148,23 +170,20 @@ describe('DashboardController', () => {
       mockSupabase.from
         .mockReturnValueOnce({
           select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-        })
-        .mockResolvedValueOnce({ data: transactions });
+          eq: vi.fn().mockResolvedValueOnce({ data: transactions }),
+      })
 
       mockSupabase.from
         .mockReturnValueOnce({
           select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-        })
-        .mockResolvedValueOnce({ data: [] });
+          eq: vi.fn().mockResolvedValueOnce({ data: [] }),
+      })
 
       mockSupabase.from
         .mockReturnValueOnce({
           select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-        })
-        .mockResolvedValueOnce({ data: [] });
+          eq: vi.fn().mockResolvedValueOnce({ data: [] }),
+      })
 
       const { mockReq, mockRes } = createMockRequestAndResponse();
 
@@ -182,23 +201,20 @@ describe('DashboardController', () => {
       mockSupabase.from
         .mockReturnValueOnce({
           select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-        })
-        .mockResolvedValueOnce({ data: null });
+          eq: vi.fn().mockResolvedValueOnce({ data: null }),
+      })
 
       mockSupabase.from
         .mockReturnValueOnce({
           select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-        })
-        .mockResolvedValueOnce({ data: null });
+          eq: vi.fn().mockResolvedValueOnce({ data: null }),
+      })
 
       mockSupabase.from
         .mockReturnValueOnce({
           select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-        })
-        .mockResolvedValueOnce({ data: null });
+          eq: vi.fn().mockResolvedValueOnce({ data: null }),
+      })
 
       const { mockReq, mockRes } = createMockRequestAndResponse();
 
@@ -225,23 +241,20 @@ describe('DashboardController', () => {
       mockSupabase.from
         .mockReturnValueOnce({
           select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-        })
-        .mockResolvedValueOnce({ data: [] });
+          eq: vi.fn().mockResolvedValueOnce({ data: [] }),
+      })
 
       mockSupabase.from
         .mockReturnValueOnce({
           select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-        })
-        .mockResolvedValueOnce({ data: [] });
+          eq: vi.fn().mockResolvedValueOnce({ data: [] }),
+      })
 
       mockSupabase.from
         .mockReturnValueOnce({
           select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-        })
-        .mockResolvedValueOnce({ data: goals });
+          eq: vi.fn().mockResolvedValueOnce({ data: goals }),
+      })
 
       const { mockReq, mockRes } = createMockRequestAndResponse();
 
@@ -256,13 +269,15 @@ describe('DashboardController', () => {
 
 // ─── TRANSACTION CONTROLLER ───
 
-import { TransactionController } from '../../infra/controllers/TransactionController';
+import { TransactionController } from '../../modules/transaction/TransactionController';
 
 describe('TransactionController', () => {
   let controller: TransactionController;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSupabase.from.mockReset();
+    mockSupabase.from.mockImplementation(mockSupabase.createBuilder);
     controller = new TransactionController();
   });
 
@@ -276,6 +291,7 @@ describe('TransactionController', () => {
       mockSupabase.from.mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        is: vi.fn().mockReturnThis(),
         order: vi.fn().mockResolvedValue({ data: mockData, error: null }),
       });
 
@@ -290,6 +306,7 @@ describe('TransactionController', () => {
       mockSupabase.from.mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        is: vi.fn().mockReturnThis(),
         order: vi.fn().mockResolvedValue({ data: null, error: { message: 'DB error' } }),
       });
 
@@ -392,13 +409,15 @@ describe('TransactionController', () => {
 
 // ─── GOAL CONTROLLER ───
 
-import { GoalController } from '../../infra/controllers/GoalController';
+import { GoalController } from '../../modules/goal/GoalController';
 
 describe('GoalController', () => {
   let controller: GoalController;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSupabase.from.mockReset();
+    mockSupabase.from.mockImplementation(mockSupabase.createBuilder);
     controller = new GoalController();
   });
 
@@ -411,7 +430,9 @@ describe('GoalController', () => {
       mockSupabase.from.mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-      }).mockResolvedValue({ data: mockGoals, error: null });
+        is: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({ data: mockGoals, error: null }),
+      });
 
       const { mockReq, mockRes } = createMockRequestAndResponse();
 
@@ -424,7 +445,9 @@ describe('GoalController', () => {
       mockSupabase.from.mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-      }).mockResolvedValue({ data: null, error: { message: 'DB error' } });
+        is: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({ data: null, error: { message: 'DB error' } }),
+      });
 
       const { mockReq, mockRes } = createMockRequestAndResponse();
 
@@ -517,13 +540,15 @@ describe('GoalController', () => {
 
 // ─── INVESTMENT CONTROLLER ───
 
-import { InvestmentController } from '../../infra/controllers/InvestmentController';
+import { InvestmentController } from '../../modules/investment/InvestmentController';
 
 describe('InvestmentController', () => {
   let controller: InvestmentController;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSupabase.from.mockReset();
+    mockSupabase.from.mockImplementation(mockSupabase.createBuilder);
     controller = new InvestmentController();
   });
 
@@ -558,8 +583,8 @@ describe('InvestmentController', () => {
 
       mockSupabase.from.mockReturnValue({
         select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-      }).mockResolvedValue({ data: mockInvestments, error: null });
+        eq: vi.fn().mockResolvedValue({ data: mockInvestments, error: null }),
+      });
 
       const { mockReq, mockRes } = createMockRequestAndResponse();
 
@@ -604,13 +629,15 @@ describe('InvestmentController', () => {
 
 // ─── CARD CONTROLLER ───
 
-import { CardController } from '../../infra/controllers/CardController';
+import { CardController } from '../../modules/card/CardController';
 
 describe('CardController', () => {
   let controller: CardController;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSupabase.from.mockReset();
+    mockSupabase.from.mockImplementation(mockSupabase.createBuilder);
     controller = new CardController();
   });
 
@@ -622,8 +649,8 @@ describe('CardController', () => {
 
       mockSupabase.from.mockReturnValue({
         select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-      }).mockResolvedValue({ data: mockCards, error: null });
+        eq: vi.fn().mockResolvedValue({ data: mockCards, error: null }),
+      });
 
       const { mockReq, mockRes } = createMockRequestAndResponse();
 
@@ -671,13 +698,15 @@ describe('CardController', () => {
 
 // ─── SUBSCRIPTION CONTROLLER ───
 
-import { SubscriptionController } from '../../infra/controllers/SubscriptionController';
+import { SubscriptionController } from '../../modules/subscription/SubscriptionController';
 
 describe('SubscriptionController', () => {
   let controller: SubscriptionController;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSupabase.from.mockReset();
+    mockSupabase.from.mockImplementation(mockSupabase.createBuilder);
     controller = new SubscriptionController();
   });
 
@@ -690,8 +719,8 @@ describe('SubscriptionController', () => {
 
       mockSupabase.from.mockReturnValue({
         select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-      }).mockResolvedValue({ data: mockSubscriptions, error: null });
+        eq: vi.fn().mockResolvedValue({ data: mockSubscriptions, error: null }),
+      });
 
       const { mockReq, mockRes } = createMockRequestAndResponse();
 
@@ -734,13 +763,15 @@ describe('SubscriptionController', () => {
 
 // ─── TASK CONTROLLER ───
 
-import { TaskController } from '../../infra/controllers/TaskController';
+import { TaskController } from '../../modules/task/TaskController';
 
 describe('TaskController', () => {
   let controller: TaskController;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSupabase.from.mockReset();
+    mockSupabase.from.mockImplementation(mockSupabase.createBuilder);
     controller = new TaskController();
   });
 
@@ -753,6 +784,7 @@ describe('TaskController', () => {
       mockSupabase.from.mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        is: vi.fn().mockReturnThis(),
         order: vi.fn().mockResolvedValue({ data: mockTasks, error: null }),
       });
 
@@ -805,7 +837,8 @@ describe('TaskController', () => {
       mockSupabase.from
         .mockReturnValueOnce({
           select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
+          match: vi.fn().mockReturnThis(),
+          is: vi.fn().mockReturnThis(),
           single: vi.fn().mockResolvedValue({ data: currentTask, error: null }),
         })
         .mockReturnValueOnce({
@@ -828,7 +861,8 @@ describe('TaskController', () => {
       mockSupabase.from
         .mockReturnValueOnce({
           select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
+          match: vi.fn().mockReturnThis(),
+          is: vi.fn().mockReturnThis(),
           single: vi.fn().mockResolvedValue({ data: null, error: null }),
         });
 
@@ -845,13 +879,15 @@ describe('TaskController', () => {
 
 // ─── ANALYTICS CONTROLLER ───
 
-import { AnalyticsController } from '../../infra/controllers/AnalyticsController';
+import { AnalyticsController } from '../../modules/analytics/AnalyticsController';
 
 describe('AnalyticsController', () => {
   let controller: AnalyticsController;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSupabase.from.mockReset();
+    mockSupabase.from.mockImplementation(mockSupabase.createBuilder);
     controller = new AnalyticsController();
   });
 
@@ -896,13 +932,15 @@ describe('AnalyticsController', () => {
 
 // ─── PAYMENT CONTROLLER ───
 
-import { PaymentController } from '../../infra/controllers/PaymentController';
+import { PaymentController } from '../../modules/payment/PaymentController';
 
 describe('PaymentController', () => {
   let controller: PaymentController;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSupabase.from.mockReset();
+    mockSupabase.from.mockImplementation(mockSupabase.createBuilder);
     controller = new PaymentController();
   });
 
@@ -910,7 +948,8 @@ describe('PaymentController', () => {
     it('should verify purchase and update license', async () => {
       mockSupabase.from.mockReturnValue({
         update: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockResolvedValue({ error: null }),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: {}, error: null }),
       });
 
       const { mockReq, mockRes } = createMockRequestAndResponse({
@@ -929,3 +968,19 @@ describe('PaymentController', () => {
     });
   });
 });
+
+// Ensure each endpoint-specific fixture still exposes the complete chainable client surface.
+const rawFromMockReturnValue = mockSupabase.from.mockReturnValue.bind(mockSupabase.from);
+mockSupabase.from.mockReturnValue = ((value: any) => rawFromMockReturnValue({
+  select: vi.fn().mockReturnThis(),
+  insert: vi.fn().mockReturnThis(),
+  update: vi.fn().mockReturnThis(),
+  delete: vi.fn().mockReturnThis(),
+  eq: vi.fn().mockReturnThis(),
+  is: vi.fn().mockReturnThis(),
+  match: vi.fn().mockReturnThis(),
+  order: vi.fn().mockReturnThis(),
+  single: vi.fn().mockResolvedValue({ data: null, error: null }),
+  maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+  ...value,
+})) as any;

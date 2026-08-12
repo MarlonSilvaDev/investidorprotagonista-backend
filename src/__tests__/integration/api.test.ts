@@ -1,24 +1,27 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
+import { routes } from '../../routes';
 
 // ─── MOCK SUPABASE ───
-const mockSupabase = {
-  auth: {
-    getUser: vi.fn(),
-    signInWithPassword: vi.fn(),
-    admin: {
-      createUser: vi.fn(),
-      updateUserById: vi.fn(),
-      getUserById: vi.fn(),
+const { mockSupabase } = vi.hoisted(() => ({
+  mockSupabase: {
+    auth: {
+      getUser: vi.fn(),
+      signInWithPassword: vi.fn(),
+      admin: {
+        createUser: vi.fn(),
+        updateUserById: vi.fn(),
+        getUserById: vi.fn(),
+      },
+      signInWithIdToken: vi.fn(),
+      refreshSession: vi.fn(),
     },
-    signInWithIdToken: vi.fn(),
-    refreshSession: vi.fn(),
+    from: vi.fn(),
   },
-  from: vi.fn(),
-};
+}));
 
-vi.mock('../../database/supabase', () => ({
+vi.mock('../../config/supabase', () => ({
   supabase: mockSupabase,
   supabaseAdmin: mockSupabase,
 }));
@@ -27,6 +30,12 @@ vi.mock('../../database/supabase', () => ({
 vi.mock('../../core/utils/MailService', () => ({
   sendConfirmationEmail: vi.fn().mockResolvedValue(undefined),
   sendPasswordResetEmail: vi.fn().mockResolvedValue(undefined),
+  sendSharedInviteEmail: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('../../core/utils/SmsService', () => ({
+  sendVerificationCode: vi.fn().mockResolvedValue(true),
+  sendVerificationSms: vi.fn().mockResolvedValue(true),
 }));
 
 vi.mock('stripe', () => {
@@ -54,9 +63,6 @@ function buildApp() {
   const app = express();
 
   app.use(express.json());
-
-  // Import routes - we'll use the same structure as the real app
-  const { routes } = require('../../infra/http/routes');
   app.use(routes);
 
   return app;
@@ -76,7 +82,7 @@ function setupAuthenticatedUser() {
   });
 }
 
-function setupProfile(status = 'active', expiresAt?: string) {
+function setupProfile(status = 'active', expiresAt?: string, tableData: any = null) {
   const profile = {
     id: mockUser.id,
     subscription_status: status,
@@ -87,18 +93,33 @@ function setupProfile(status = 'active', expiresAt?: string) {
     email_registrado: true,
     provider_type: 'email',
     stripe_customer_id: null,
+    user_type: 'usuario',
+    plan: 'usuario',
+    country: 'BR',
+    role: 'padrao',
   };
 
-  mockSupabase.from.mockReturnValue({
+  const createChain = (data: any) => ({
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
-    single: vi.fn().mockResolvedValue({ data: profile, error: null }),
-    update: vi.fn().mockReturnThis(),
-    match: vi.fn().mockReturnThis(),
-    insert: vi.fn().mockReturnThis(),
-    delete: vi.fn().mockReturnThis(),
+    or: vi.fn().mockReturnThis(),
     order: vi.fn().mockReturnThis(),
     gt: vi.fn().mockReturnThis(),
+    match: vi.fn().mockReturnThis(),
+    single: vi.fn().mockResolvedValue({ data, error: null }),
+    maybeSingle: vi.fn().mockResolvedValue({ data, error: null }),
+    update: vi.fn().mockReturnThis(),
+    upsert: vi.fn().mockResolvedValue({ data, error: null }),
+    insert: vi.fn().mockReturnThis(),
+    delete: vi.fn().mockReturnThis(),
+    then: (resolve: any) => resolve({ data, error: null }),
+  });
+
+  mockSupabase.from.mockImplementation((table: string) => {
+    if (table === 'profiles') {
+      return createChain(profile);
+    }
+    return createChain(tableData);
   });
 
   return profile;
@@ -109,6 +130,7 @@ describe('Integration Tests - API Endpoints', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: mockUser.id, email: mockUser.email } }, error: null });
     process.env.JWT_SECRET = 'test-jwt-secret';
     process.env.STRIPE_SECRET_KEY = 'sk_test_mock';
     process.env.STRIPE_WEBHOOK_SECRET = 'whsec_mock';
@@ -133,14 +155,19 @@ describe('Integration Tests - API Endpoints', () => {
       });
 
       mockSupabase.from.mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
         update: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockResolvedValue({ error: null }),
+        upsert: vi.fn().mockResolvedValue({ error: null }),
       });
 
       const response = await request(app)
         .post('/auth/register')
         .send({
           name: 'New User',
+          documentNumber: '52998224725',
+          phone: '11999999999',
           email: 'newuser@example.com',
           password: 'SecurePass1@',
           locale: 'pt-BR',
@@ -833,3 +860,6 @@ describe('Integration Tests - API Endpoints', () => {
     });
   });
 });
+
+// Test requests use plain JSON; credential encryption is tested separately.
+vi.mock('../../shared/middlewares/decryptAuthCredentials', () => ({ decryptAuthCredentials: (_req: any, _res: any, next: any) => next() }));

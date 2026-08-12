@@ -1,0 +1,1 @@
+{"version":3,"file":"ensureAdmin.d.ts","sourceRoot":"","sources":["../../../src/shared/middlewares/ensureAdmin.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,OAAO,EAAE,QAAQ,EAAE,YAAY,EAAE,MAAM,SAAS,CAAC;AAG1D;;;GAGG;AACH,wBAAsB,WAAW,CAC/B,OAAO,EAAE,OAAO,EAChB,QAAQ,EAAE,QAAQ,EAClB,IAAI,EAAE,YAAY,sDA6BnB"}

@@ -1,20 +1,39 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // ─── MOCK SUPABASE MODULE ───
-const mockSupabase = {
-  auth: {
-    getUser: vi.fn(),
-  },
-  from: vi.fn(),
-};
+const { mockSupabase, mockQueryBuilder } = vi.hoisted(() => {
+  const queryBuilder: any = {
+    select: vi.fn().mockReturnThis(),
+    insert: vi.fn().mockReturnThis(),
+    update: vi.fn().mockReturnThis(),
+    delete: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    neq: vi.fn().mockReturnThis(),
+    is: vi.fn().mockReturnThis(),
+    in: vi.fn().mockReturnThis(),
+    match: vi.fn().mockReturnThis(),
+    maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+    single: vi.fn().mockResolvedValue({ data: null, error: null }),
+  };
+  return {
+    mockQueryBuilder: queryBuilder,
+    mockSupabase: {
+      auth: {
+        getUser: vi.fn(),
+      },
+      from: vi.fn().mockReturnValue(queryBuilder),
+    },
+  };
+});
 
-vi.mock('../../database/supabase', () => ({
+vi.mock('../../config/supabase', () => ({
   supabase: mockSupabase,
+  supabaseAdmin: mockSupabase,
 }));
 
 // ─── ensureAuthenticated ───
 
-import { ensureAuthenticated } from '../../infra/http/middlewares/ensureAuthenticated';
+import { ensureAuthenticated } from '../../shared/middlewares/ensureAuthenticated';
 import { Request, Response, NextFunction } from 'express';
 
 function createMockRequestAndResponse(overrides: Partial<Request & Response> = {}) {
@@ -148,7 +167,19 @@ describe('ensureAuthenticated Middleware', () => {
 
 // ─── checkLicensing ───
 
-import { checkLicensing } from '../../infra/http/middlewares/checkLicensing';
+import { checkLicensing, normalizePlan, requirePlan } from '../../shared/middlewares/checkLicensing';
+import { rateLimiter } from '../../shared/middlewares/rateLimiter';
+
+describe('normalizePlan Helper', () => {
+  it('should normalize plan strings to the 3 official plan types', () => {
+    expect(normalizePlan('free')).toBe('free');
+    expect(normalizePlan('')).toBe('free');
+    expect(normalizePlan('pro_usuario')).toBe('pro_usuario');
+    expect(normalizePlan('pro')).toBe('pro_usuario');
+    expect(normalizePlan('pro_empresa')).toBe('pro_empresa');
+    expect(normalizePlan('free', 'empresa')).toBe('pro_empresa');
+  });
+});
 
 describe('checkLicensing Middleware', () => {
   const mockProfile = {
@@ -166,6 +197,7 @@ describe('checkLicensing Middleware', () => {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       single: vi.fn().mockResolvedValue({ data: null, error: { message: 'Not found' } }),
+      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: { message: 'Not found' } }),
     });
 
     const { mockReq, mockRes, mockNext } = createMockRequestAndResponse({
@@ -177,7 +209,7 @@ describe('checkLicensing Middleware', () => {
 
     expect(mockRes.status).toHaveBeenCalledWith(403);
     expect(mockRes.json).toHaveBeenCalledWith(
-      expect.objectContaining({ message: expect.stringContaining('profile not found') })
+      expect.objectContaining({ message: expect.stringMatching(/perfil|profile/i) })
     );
   });
 
@@ -192,12 +224,14 @@ describe('checkLicensing Middleware', () => {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       single: vi.fn().mockResolvedValue({ data: expiredProfile, error: null }),
+      maybeSingle: vi.fn().mockResolvedValue({ data: expiredProfile, error: null }),
     });
 
     mockSupabase.from.mockReturnValue({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       single: vi.fn().mockResolvedValue({ data: expiredProfile, error: null }),
+      maybeSingle: vi.fn().mockResolvedValue({ data: expiredProfile, error: null }),
     });
 
     // Mock the update call for expired status
@@ -207,6 +241,7 @@ describe('checkLicensing Middleware', () => {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       single: vi.fn().mockResolvedValue({ data: expiredProfile, error: null }),
+      maybeSingle: vi.fn().mockResolvedValue({ data: expiredProfile, error: null }),
       update: mockUpdate,
     });
 
@@ -234,6 +269,7 @@ describe('checkLicensing Middleware', () => {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       single: vi.fn().mockResolvedValue({ data: canceledProfile, error: null }),
+      maybeSingle: vi.fn().mockResolvedValue({ data: canceledProfile, error: null }),
     });
 
     const { mockReq, mockRes, mockNext } = createMockRequestAndResponse({
@@ -249,9 +285,11 @@ describe('checkLicensing Middleware', () => {
     );
   });
 
-  it('should call next() when license is valid', async () => {
+  it('should call next() when license is valid and free', async () => {
     const validProfile = {
+      plan: 'free',
       subscription_status: 'active',
+      subscription_origin: 'free',
       subscription_expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
       trial_started_at: new Date().toISOString(),
     };
@@ -260,6 +298,7 @@ describe('checkLicensing Middleware', () => {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       single: vi.fn().mockResolvedValue({ data: validProfile, error: null }),
+      maybeSingle: vi.fn().mockResolvedValue({ data: validProfile, error: null }),
     });
 
     const { mockReq, mockRes, mockNext } = createMockRequestAndResponse({
@@ -271,5 +310,88 @@ describe('checkLicensing Middleware', () => {
 
     expect(mockNext).toHaveBeenCalled();
     expect(mockRes.status).not.toHaveBeenCalled();
+  });
+
+  it('should call next() when pro_usuario plan has valid stripe origin', async () => {
+    const validProProfile = {
+      plan: 'pro_usuario',
+      subscription_status: 'active',
+      subscription_origin: 'stripe',
+      subscription_expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+      trial_started_at: new Date().toISOString(),
+    };
+
+    mockSupabase.from.mockReturnValue({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: validProProfile, error: null }),
+      maybeSingle: vi.fn().mockResolvedValue({ data: validProProfile, error: null }),
+    });
+
+    const { mockReq, mockRes, mockNext } = createMockRequestAndResponse({
+      headers: {},
+      user: { id: 'user-123' },
+    } as any);
+
+    await checkLicensing(mockReq, mockRes, mockNext);
+
+    expect(mockNext).toHaveBeenCalled();
+  });
+
+  it('should return 403 INVALID_SUBSCRIPTION_ORIGIN for paid plan with missing origin', async () => {
+    const invalidOriginProfile = {
+      plan: 'pro_usuario',
+      subscription_status: 'active',
+      subscription_origin: null,
+      subscription_expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+      trial_started_at: new Date().toISOString(),
+    };
+
+    mockSupabase.from.mockReturnValue({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: invalidOriginProfile, error: null }),
+      maybeSingle: vi.fn().mockResolvedValue({ data: invalidOriginProfile, error: null }),
+    });
+
+    const { mockReq, mockRes, mockNext } = createMockRequestAndResponse({
+      headers: {},
+      user: { id: 'user-123' },
+    } as any);
+
+    await checkLicensing(mockReq, mockRes, mockNext);
+
+    expect(mockRes.status).toHaveBeenCalledWith(403);
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'INVALID_SUBSCRIPTION_ORIGIN' })
+    );
+  });
+});
+
+describe('rateLimiter Middleware', () => {
+  it('should allow requests within limit', () => {
+    const middleware = rateLimiter(5, 60000);
+    const { mockReq, mockRes, mockNext } = createMockRequestAndResponse({
+      ip: '127.0.0.1',
+    } as any);
+
+    middleware(mockReq, mockRes, mockNext);
+    expect(mockNext).toHaveBeenCalled();
+  });
+
+  it('should return 429 when rate limit is exceeded', () => {
+    const middleware = rateLimiter(2, 60000);
+    const { mockReq, mockRes, mockNext } = createMockRequestAndResponse({
+      ip: '192.168.1.1',
+    } as any);
+
+    middleware(mockReq, mockRes, mockNext);
+    middleware(mockReq, mockRes, mockNext);
+    middleware(mockReq, mockRes, mockNext);
+
+    expect(mockRes.status).toHaveBeenCalledWith(429);
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'RATE_LIMIT_EXCEEDED' })
+    );
   });
 });

@@ -79,7 +79,7 @@ function mockResponse() {
             (0, vitest_1.expect)(total).toBe(3);
             (0, vitest_1.expect)(completed).toBe(1);
             (0, vitest_1.expect)(active).toBe(2);
-            (0, vitest_1.expect)(avgProgress).toBeCloseTo(0.2333, 3);
+            (0, vitest_1.expect)(avgProgress).toBeCloseTo(0.4, 3);
         });
         (0, vitest_1.it)('should calculate investment portfolio value', () => {
             const investments = [

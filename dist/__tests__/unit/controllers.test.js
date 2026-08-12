@@ -2,15 +2,41 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const vitest_1 = require("vitest");
 // ─── MOCK SUPABASE ───
-const mockSupabase = {
-    from: vitest_1.vi.fn(),
-};
-vitest_1.vi.mock('../../database/supabase', () => ({
+const { mockSupabase } = vitest_1.vi.hoisted(() => {
+    const createBuilder = () => {
+        const builder = {
+            select: vitest_1.vi.fn().mockImplementation(() => builder),
+            insert: vitest_1.vi.fn().mockImplementation(() => builder),
+            update: vitest_1.vi.fn().mockImplementation(() => builder),
+            delete: vitest_1.vi.fn().mockImplementation(() => builder),
+            eq: vitest_1.vi.fn().mockImplementation(() => builder),
+            neq: vitest_1.vi.fn().mockImplementation(() => builder),
+            is: vitest_1.vi.fn().mockImplementation(() => builder),
+            in: vitest_1.vi.fn().mockImplementation(() => builder),
+            not: vitest_1.vi.fn().mockImplementation(() => builder),
+            or: vitest_1.vi.fn().mockImplementation(() => builder),
+            gte: vitest_1.vi.fn().mockImplementation(() => builder),
+            lte: vitest_1.vi.fn().mockImplementation(() => builder),
+            match: vitest_1.vi.fn().mockImplementation(() => builder),
+            order: vitest_1.vi.fn().mockImplementation(() => builder),
+            single: vitest_1.vi.fn().mockResolvedValue({ data: null, error: null }),
+            maybeSingle: vitest_1.vi.fn().mockResolvedValue({ data: null, error: null }),
+        };
+        return builder;
+    };
+    return {
+        mockSupabase: {
+            from: vitest_1.vi.fn().mockImplementation(createBuilder),
+            createBuilder,
+        },
+    };
+});
+vitest_1.vi.mock('../../config/supabase', () => ({
     supabase: mockSupabase,
     supabaseAdmin: mockSupabase,
 }));
 // ─── DASHBOARD CONTROLLER ───
-const DashboardController_1 = require("../../infra/controllers/DashboardController");
+const DashboardController_1 = require("../../modules/dashboard/DashboardController");
 function createMockRequestAndResponse(overrides = {}) {
     const mockReq = {
         user: { id: 'user-dashboard-test' },
@@ -27,6 +53,8 @@ function createMockRequestAndResponse(overrides = {}) {
     let controller;
     (0, vitest_1.beforeEach)(() => {
         vitest_1.vi.clearAllMocks();
+        mockSupabase.from.mockReset();
+        mockSupabase.from.mockImplementation(mockSupabase.createBuilder);
         controller = new DashboardController_1.DashboardController();
     });
     (0, vitest_1.describe)('getConsolidatedData', () => {
@@ -47,23 +75,20 @@ function createMockRequestAndResponse(overrides = {}) {
             mockSupabase.from
                 .mockReturnValueOnce({
                 select: vitest_1.vi.fn().mockReturnThis(),
-                eq: vitest_1.vi.fn().mockReturnThis(),
-            })
-                .mockResolvedValueOnce({ data: mockTransactions });
+                eq: vitest_1.vi.fn().mockResolvedValueOnce({ data: mockTransactions }),
+            });
             // Mock investments query
             mockSupabase.from
                 .mockReturnValueOnce({
                 select: vitest_1.vi.fn().mockReturnThis(),
-                eq: vitest_1.vi.fn().mockReturnThis(),
-            })
-                .mockResolvedValueOnce({ data: mockInvestments });
+                eq: vitest_1.vi.fn().mockResolvedValueOnce({ data: mockInvestments }),
+            });
             // Mock goals query
             mockSupabase.from
                 .mockReturnValueOnce({
                 select: vitest_1.vi.fn().mockReturnThis(),
-                eq: vitest_1.vi.fn().mockReturnThis(),
-            })
-                .mockResolvedValueOnce({ data: mockGoals });
+                eq: vitest_1.vi.fn().mockResolvedValueOnce({ data: mockGoals }),
+            });
             const { mockReq, mockRes } = createMockRequestAndResponse();
             await controller.getConsolidatedData(mockReq, mockRes);
             (0, vitest_1.expect)(mockRes.json).toHaveBeenCalledWith(vitest_1.expect.objectContaining({
@@ -84,21 +109,18 @@ function createMockRequestAndResponse(overrides = {}) {
             mockSupabase.from
                 .mockReturnValueOnce({
                 select: vitest_1.vi.fn().mockReturnThis(),
-                eq: vitest_1.vi.fn().mockReturnThis(),
-            })
-                .mockResolvedValueOnce({ data: [] });
+                eq: vitest_1.vi.fn().mockResolvedValueOnce({ data: [] }),
+            });
             mockSupabase.from
                 .mockReturnValueOnce({
                 select: vitest_1.vi.fn().mockReturnThis(),
-                eq: vitest_1.vi.fn().mockReturnThis(),
-            })
-                .mockResolvedValueOnce({ data: [] });
+                eq: vitest_1.vi.fn().mockResolvedValueOnce({ data: [] }),
+            });
             mockSupabase.from
                 .mockReturnValueOnce({
                 select: vitest_1.vi.fn().mockReturnThis(),
-                eq: vitest_1.vi.fn().mockReturnThis(),
-            })
-                .mockResolvedValueOnce({ data: [] });
+                eq: vitest_1.vi.fn().mockResolvedValueOnce({ data: [] }),
+            });
             const { mockReq, mockRes } = createMockRequestAndResponse();
             await controller.getConsolidatedData(mockReq, mockRes);
             (0, vitest_1.expect)(mockRes.json).toHaveBeenCalledWith(vitest_1.expect.objectContaining({
@@ -119,21 +141,18 @@ function createMockRequestAndResponse(overrides = {}) {
             mockSupabase.from
                 .mockReturnValueOnce({
                 select: vitest_1.vi.fn().mockReturnThis(),
-                eq: vitest_1.vi.fn().mockReturnThis(),
-            })
-                .mockResolvedValueOnce({ data: transactions });
+                eq: vitest_1.vi.fn().mockResolvedValueOnce({ data: transactions }),
+            });
             mockSupabase.from
                 .mockReturnValueOnce({
                 select: vitest_1.vi.fn().mockReturnThis(),
-                eq: vitest_1.vi.fn().mockReturnThis(),
-            })
-                .mockResolvedValueOnce({ data: [] });
+                eq: vitest_1.vi.fn().mockResolvedValueOnce({ data: [] }),
+            });
             mockSupabase.from
                 .mockReturnValueOnce({
                 select: vitest_1.vi.fn().mockReturnThis(),
-                eq: vitest_1.vi.fn().mockReturnThis(),
-            })
-                .mockResolvedValueOnce({ data: [] });
+                eq: vitest_1.vi.fn().mockResolvedValueOnce({ data: [] }),
+            });
             const { mockReq, mockRes } = createMockRequestAndResponse();
             await controller.getConsolidatedData(mockReq, mockRes);
             const charts = mockRes.json.mock.calls[0][0].charts;
@@ -146,21 +165,18 @@ function createMockRequestAndResponse(overrides = {}) {
             mockSupabase.from
                 .mockReturnValueOnce({
                 select: vitest_1.vi.fn().mockReturnThis(),
-                eq: vitest_1.vi.fn().mockReturnThis(),
-            })
-                .mockResolvedValueOnce({ data: null });
+                eq: vitest_1.vi.fn().mockResolvedValueOnce({ data: null }),
+            });
             mockSupabase.from
                 .mockReturnValueOnce({
                 select: vitest_1.vi.fn().mockReturnThis(),
-                eq: vitest_1.vi.fn().mockReturnThis(),
-            })
-                .mockResolvedValueOnce({ data: null });
+                eq: vitest_1.vi.fn().mockResolvedValueOnce({ data: null }),
+            });
             mockSupabase.from
                 .mockReturnValueOnce({
                 select: vitest_1.vi.fn().mockReturnThis(),
-                eq: vitest_1.vi.fn().mockReturnThis(),
-            })
-                .mockResolvedValueOnce({ data: null });
+                eq: vitest_1.vi.fn().mockResolvedValueOnce({ data: null }),
+            });
             const { mockReq, mockRes } = createMockRequestAndResponse();
             await controller.getConsolidatedData(mockReq, mockRes);
             (0, vitest_1.expect)(mockRes.json).toHaveBeenCalledWith(vitest_1.expect.objectContaining({
@@ -180,21 +196,18 @@ function createMockRequestAndResponse(overrides = {}) {
             mockSupabase.from
                 .mockReturnValueOnce({
                 select: vitest_1.vi.fn().mockReturnThis(),
-                eq: vitest_1.vi.fn().mockReturnThis(),
-            })
-                .mockResolvedValueOnce({ data: [] });
+                eq: vitest_1.vi.fn().mockResolvedValueOnce({ data: [] }),
+            });
             mockSupabase.from
                 .mockReturnValueOnce({
                 select: vitest_1.vi.fn().mockReturnThis(),
-                eq: vitest_1.vi.fn().mockReturnThis(),
-            })
-                .mockResolvedValueOnce({ data: [] });
+                eq: vitest_1.vi.fn().mockResolvedValueOnce({ data: [] }),
+            });
             mockSupabase.from
                 .mockReturnValueOnce({
                 select: vitest_1.vi.fn().mockReturnThis(),
-                eq: vitest_1.vi.fn().mockReturnThis(),
-            })
-                .mockResolvedValueOnce({ data: goals });
+                eq: vitest_1.vi.fn().mockResolvedValueOnce({ data: goals }),
+            });
             const { mockReq, mockRes } = createMockRequestAndResponse();
             await controller.getConsolidatedData(mockReq, mockRes);
             const progress = mockRes.json.mock.calls[0][0].charts.goalsProgress;
@@ -204,11 +217,13 @@ function createMockRequestAndResponse(overrides = {}) {
     });
 });
 // ─── TRANSACTION CONTROLLER ───
-const TransactionController_1 = require("../../infra/controllers/TransactionController");
+const TransactionController_1 = require("../../modules/transaction/TransactionController");
 (0, vitest_1.describe)('TransactionController', () => {
     let controller;
     (0, vitest_1.beforeEach)(() => {
         vitest_1.vi.clearAllMocks();
+        mockSupabase.from.mockReset();
+        mockSupabase.from.mockImplementation(mockSupabase.createBuilder);
         controller = new TransactionController_1.TransactionController();
     });
     (0, vitest_1.describe)('list', () => {
@@ -220,6 +235,7 @@ const TransactionController_1 = require("../../infra/controllers/TransactionCont
             mockSupabase.from.mockReturnValue({
                 select: vitest_1.vi.fn().mockReturnThis(),
                 eq: vitest_1.vi.fn().mockReturnThis(),
+                is: vitest_1.vi.fn().mockReturnThis(),
                 order: vitest_1.vi.fn().mockResolvedValue({ data: mockData, error: null }),
             });
             const { mockReq, mockRes } = createMockRequestAndResponse();
@@ -230,6 +246,7 @@ const TransactionController_1 = require("../../infra/controllers/TransactionCont
             mockSupabase.from.mockReturnValue({
                 select: vitest_1.vi.fn().mockReturnThis(),
                 eq: vitest_1.vi.fn().mockReturnThis(),
+                is: vitest_1.vi.fn().mockReturnThis(),
                 order: vitest_1.vi.fn().mockResolvedValue({ data: null, error: { message: 'DB error' } }),
             });
             const { mockReq, mockRes } = createMockRequestAndResponse();
@@ -310,11 +327,13 @@ const TransactionController_1 = require("../../infra/controllers/TransactionCont
     });
 });
 // ─── GOAL CONTROLLER ───
-const GoalController_1 = require("../../infra/controllers/GoalController");
+const GoalController_1 = require("../../modules/goal/GoalController");
 (0, vitest_1.describe)('GoalController', () => {
     let controller;
     (0, vitest_1.beforeEach)(() => {
         vitest_1.vi.clearAllMocks();
+        mockSupabase.from.mockReset();
+        mockSupabase.from.mockImplementation(mockSupabase.createBuilder);
         controller = new GoalController_1.GoalController();
     });
     (0, vitest_1.describe)('list', () => {
@@ -325,7 +344,9 @@ const GoalController_1 = require("../../infra/controllers/GoalController");
             mockSupabase.from.mockReturnValue({
                 select: vitest_1.vi.fn().mockReturnThis(),
                 eq: vitest_1.vi.fn().mockReturnThis(),
-            }).mockResolvedValue({ data: mockGoals, error: null });
+                is: vitest_1.vi.fn().mockReturnThis(),
+                order: vitest_1.vi.fn().mockResolvedValue({ data: mockGoals, error: null }),
+            });
             const { mockReq, mockRes } = createMockRequestAndResponse();
             await controller.list(mockReq, mockRes);
             (0, vitest_1.expect)(mockRes.json).toHaveBeenCalledWith(mockGoals);
@@ -334,7 +355,9 @@ const GoalController_1 = require("../../infra/controllers/GoalController");
             mockSupabase.from.mockReturnValue({
                 select: vitest_1.vi.fn().mockReturnThis(),
                 eq: vitest_1.vi.fn().mockReturnThis(),
-            }).mockResolvedValue({ data: null, error: { message: 'DB error' } });
+                is: vitest_1.vi.fn().mockReturnThis(),
+                order: vitest_1.vi.fn().mockResolvedValue({ data: null, error: { message: 'DB error' } }),
+            });
             const { mockReq, mockRes } = createMockRequestAndResponse();
             await controller.list(mockReq, mockRes);
             (0, vitest_1.expect)(mockRes.status).toHaveBeenCalledWith(400);
@@ -408,11 +431,13 @@ const GoalController_1 = require("../../infra/controllers/GoalController");
     });
 });
 // ─── INVESTMENT CONTROLLER ───
-const InvestmentController_1 = require("../../infra/controllers/InvestmentController");
+const InvestmentController_1 = require("../../modules/investment/InvestmentController");
 (0, vitest_1.describe)('InvestmentController', () => {
     let controller;
     (0, vitest_1.beforeEach)(() => {
         vitest_1.vi.clearAllMocks();
+        mockSupabase.from.mockReset();
+        mockSupabase.from.mockImplementation(mockSupabase.createBuilder);
         controller = new InvestmentController_1.InvestmentController();
     });
     (0, vitest_1.describe)('list', () => {
@@ -445,8 +470,8 @@ const InvestmentController_1 = require("../../infra/controllers/InvestmentContro
             ];
             mockSupabase.from.mockReturnValue({
                 select: vitest_1.vi.fn().mockReturnThis(),
-                eq: vitest_1.vi.fn().mockReturnThis(),
-            }).mockResolvedValue({ data: mockInvestments, error: null });
+                eq: vitest_1.vi.fn().mockResolvedValue({ data: mockInvestments, error: null }),
+            });
             const { mockReq, mockRes } = createMockRequestAndResponse();
             await controller.list(mockReq, mockRes);
             const response = mockRes.json.mock.calls[0][0];
@@ -477,11 +502,13 @@ const InvestmentController_1 = require("../../infra/controllers/InvestmentContro
     });
 });
 // ─── CARD CONTROLLER ───
-const CardController_1 = require("../../infra/controllers/CardController");
+const CardController_1 = require("../../modules/card/CardController");
 (0, vitest_1.describe)('CardController', () => {
     let controller;
     (0, vitest_1.beforeEach)(() => {
         vitest_1.vi.clearAllMocks();
+        mockSupabase.from.mockReset();
+        mockSupabase.from.mockImplementation(mockSupabase.createBuilder);
         controller = new CardController_1.CardController();
     });
     (0, vitest_1.describe)('list', () => {
@@ -491,8 +518,8 @@ const CardController_1 = require("../../infra/controllers/CardController");
             ];
             mockSupabase.from.mockReturnValue({
                 select: vitest_1.vi.fn().mockReturnThis(),
-                eq: vitest_1.vi.fn().mockReturnThis(),
-            }).mockResolvedValue({ data: mockCards, error: null });
+                eq: vitest_1.vi.fn().mockResolvedValue({ data: mockCards, error: null }),
+            });
             const { mockReq, mockRes } = createMockRequestAndResponse();
             await controller.list(mockReq, mockRes);
             (0, vitest_1.expect)(mockRes.json).toHaveBeenCalledWith(mockCards);
@@ -530,11 +557,13 @@ const CardController_1 = require("../../infra/controllers/CardController");
     });
 });
 // ─── SUBSCRIPTION CONTROLLER ───
-const SubscriptionController_1 = require("../../infra/controllers/SubscriptionController");
+const SubscriptionController_1 = require("../../modules/subscription/SubscriptionController");
 (0, vitest_1.describe)('SubscriptionController', () => {
     let controller;
     (0, vitest_1.beforeEach)(() => {
         vitest_1.vi.clearAllMocks();
+        mockSupabase.from.mockReset();
+        mockSupabase.from.mockImplementation(mockSupabase.createBuilder);
         controller = new SubscriptionController_1.SubscriptionController();
     });
     (0, vitest_1.describe)('list', () => {
@@ -545,8 +574,8 @@ const SubscriptionController_1 = require("../../infra/controllers/SubscriptionCo
             ];
             mockSupabase.from.mockReturnValue({
                 select: vitest_1.vi.fn().mockReturnThis(),
-                eq: vitest_1.vi.fn().mockReturnThis(),
-            }).mockResolvedValue({ data: mockSubscriptions, error: null });
+                eq: vitest_1.vi.fn().mockResolvedValue({ data: mockSubscriptions, error: null }),
+            });
             const { mockReq, mockRes } = createMockRequestAndResponse();
             await controller.list(mockReq, mockRes);
             const response = mockRes.json.mock.calls[0][0];
@@ -579,11 +608,13 @@ const SubscriptionController_1 = require("../../infra/controllers/SubscriptionCo
     });
 });
 // ─── TASK CONTROLLER ───
-const TaskController_1 = require("../../infra/controllers/TaskController");
+const TaskController_1 = require("../../modules/task/TaskController");
 (0, vitest_1.describe)('TaskController', () => {
     let controller;
     (0, vitest_1.beforeEach)(() => {
         vitest_1.vi.clearAllMocks();
+        mockSupabase.from.mockReset();
+        mockSupabase.from.mockImplementation(mockSupabase.createBuilder);
         controller = new TaskController_1.TaskController();
     });
     (0, vitest_1.describe)('list', () => {
@@ -594,6 +625,7 @@ const TaskController_1 = require("../../infra/controllers/TaskController");
             mockSupabase.from.mockReturnValue({
                 select: vitest_1.vi.fn().mockReturnThis(),
                 eq: vitest_1.vi.fn().mockReturnThis(),
+                is: vitest_1.vi.fn().mockReturnThis(),
                 order: vitest_1.vi.fn().mockResolvedValue({ data: mockTasks, error: null }),
             });
             const { mockReq, mockRes } = createMockRequestAndResponse();
@@ -635,7 +667,8 @@ const TaskController_1 = require("../../infra/controllers/TaskController");
             mockSupabase.from
                 .mockReturnValueOnce({
                 select: vitest_1.vi.fn().mockReturnThis(),
-                eq: vitest_1.vi.fn().mockReturnThis(),
+                match: vitest_1.vi.fn().mockReturnThis(),
+                is: vitest_1.vi.fn().mockReturnThis(),
                 single: vitest_1.vi.fn().mockResolvedValue({ data: currentTask, error: null }),
             })
                 .mockReturnValueOnce({
@@ -654,7 +687,8 @@ const TaskController_1 = require("../../infra/controllers/TaskController");
             mockSupabase.from
                 .mockReturnValueOnce({
                 select: vitest_1.vi.fn().mockReturnThis(),
-                eq: vitest_1.vi.fn().mockReturnThis(),
+                match: vitest_1.vi.fn().mockReturnThis(),
+                is: vitest_1.vi.fn().mockReturnThis(),
                 single: vitest_1.vi.fn().mockResolvedValue({ data: null, error: null }),
             });
             const { mockReq, mockRes } = createMockRequestAndResponse({
@@ -666,11 +700,13 @@ const TaskController_1 = require("../../infra/controllers/TaskController");
     });
 });
 // ─── ANALYTICS CONTROLLER ───
-const AnalyticsController_1 = require("../../infra/controllers/AnalyticsController");
+const AnalyticsController_1 = require("../../modules/analytics/AnalyticsController");
 (0, vitest_1.describe)('AnalyticsController', () => {
     let controller;
     (0, vitest_1.beforeEach)(() => {
         vitest_1.vi.clearAllMocks();
+        mockSupabase.from.mockReset();
+        mockSupabase.from.mockImplementation(mockSupabase.createBuilder);
         controller = new AnalyticsController_1.AnalyticsController();
     });
     (0, vitest_1.describe)('track', () => {
@@ -704,18 +740,21 @@ const AnalyticsController_1 = require("../../infra/controllers/AnalyticsControll
     });
 });
 // ─── PAYMENT CONTROLLER ───
-const PaymentController_1 = require("../../infra/controllers/PaymentController");
+const PaymentController_1 = require("../../modules/payment/PaymentController");
 (0, vitest_1.describe)('PaymentController', () => {
     let controller;
     (0, vitest_1.beforeEach)(() => {
         vitest_1.vi.clearAllMocks();
+        mockSupabase.from.mockReset();
+        mockSupabase.from.mockImplementation(mockSupabase.createBuilder);
         controller = new PaymentController_1.PaymentController();
     });
     (0, vitest_1.describe)('verifyPurchase', () => {
         (0, vitest_1.it)('should verify purchase and update license', async () => {
             mockSupabase.from.mockReturnValue({
                 update: vitest_1.vi.fn().mockReturnThis(),
-                eq: vitest_1.vi.fn().mockResolvedValue({ error: null }),
+                eq: vitest_1.vi.fn().mockReturnThis(),
+                single: vitest_1.vi.fn().mockResolvedValue({ data: {}, error: null }),
             });
             const { mockReq, mockRes } = createMockRequestAndResponse({
                 body: {
@@ -729,4 +768,19 @@ const PaymentController_1 = require("../../infra/controllers/PaymentController")
         });
     });
 });
+// Ensure each endpoint-specific fixture still exposes the complete chainable client surface.
+const rawFromMockReturnValue = mockSupabase.from.mockReturnValue.bind(mockSupabase.from);
+mockSupabase.from.mockReturnValue = ((value) => rawFromMockReturnValue({
+    select: vitest_1.vi.fn().mockReturnThis(),
+    insert: vitest_1.vi.fn().mockReturnThis(),
+    update: vitest_1.vi.fn().mockReturnThis(),
+    delete: vitest_1.vi.fn().mockReturnThis(),
+    eq: vitest_1.vi.fn().mockReturnThis(),
+    is: vitest_1.vi.fn().mockReturnThis(),
+    match: vitest_1.vi.fn().mockReturnThis(),
+    order: vitest_1.vi.fn().mockReturnThis(),
+    single: vitest_1.vi.fn().mockResolvedValue({ data: null, error: null }),
+    maybeSingle: vitest_1.vi.fn().mockResolvedValue({ data: null, error: null }),
+    ...value,
+}));
 //# sourceMappingURL=controllers.test.js.map

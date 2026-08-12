@@ -1,4 +1,5 @@
 import { getEmailTemplate, interpolateTemplate, resolveLocale, type AppLocale } from './i18n';
+import { sendEmail as notifyGwSendEmail } from './NotifyGwService';
 
 /** E-mail de confirmação — com suporte a idioma. */
 export async function sendConfirmationEmail(params: {
@@ -70,36 +71,13 @@ export async function sendSharedInviteEmail(params: {
   await sendMail(params.to, copy.subject, copy.body);
 }
 
-// ─── INTERNAL ───
-
-function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`${name} não configurado no .env`);
-  }
-  return value;
-}
+// ─── INTERNAL — envia via NotifyGW ───
 
 async function sendMail(to: string, subject: string, html: string) {
-  const { default: nodemailer } = await import('nodemailer');
-
-  const port = Number(process.env.SMTP_PORT || 465);
-  const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port,
-    secure: port === 465,
-    auth: {
-      user: requireEnv('SMTP_USER'),
-      pass: requireEnv('SMTP_PASS').replace(/\s+/g, ''),
-    },
-  });
-
-  const fromName = process.env.SMTP_FROM_NAME || 'Investidor Protagonista';
-  const fromEmail = process.env.SMTP_FROM_EMAIL || requireEnv('SMTP_USER');
-  await transporter.sendMail({
-    from: `"${fromName}" <${fromEmail}>`,
-    to,
-    subject,
-    html,
-  });
+  const result = await notifyGwSendEmail(to, subject, html);
+  if (!result.ok) {
+    console.error(`[MAIL] Falha ao enviar e-mail para ${to} via NotifyGW:`, result.error);
+    throw new Error(`Falha ao enviar e-mail: ${result.error}`);
+  }
+  console.log(`[MAIL] E-mail enfileirado para ${to} → outbox_id=${result.outboxId}`);
 }

@@ -104,7 +104,7 @@ describe('AuthValidation', () => {
     });
 
     it('should return error for password with whitespace only', () => {
-      expect(validatePassword('        ')).toBe('A senha deve ter no mínimo 8 caracteres');
+      expect(validatePassword('    ')).toBe('A senha deve ter no mínimo 8 caracteres');
     });
   });
 

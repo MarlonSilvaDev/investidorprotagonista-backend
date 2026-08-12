@@ -1,5 +1,6 @@
 -- -----------------------------------------------------------------------------
 -- RECRIAÇÃO COMPLETA DO BANCO SUPABASE (SEM ALTER TABLE / SEM MIGRAÇÕES)
+-- Apenas CREATE TABLE e CREATE INDEX (estrutura 100% limpa)
 -- -----------------------------------------------------------------------------
 
 DROP TABLE IF EXISTS public.tasks CASCADE;
@@ -14,6 +15,7 @@ DROP TABLE IF EXISTS public.goals CASCADE;
 DROP TABLE IF EXISTS public.investments CASCADE;
 DROP TABLE IF EXISTS public.market_assets CASCADE;
 DROP TABLE IF EXISTS public.open_finance_items CASCADE;
+DROP TABLE IF EXISTS public.posts CASCADE;
 DROP TABLE IF EXISTS public.sms_verifications CASCADE;
 DROP TABLE IF EXISTS public.profiles CASCADE;
 DROP TABLE IF EXISTS public.app_metadata CASCADE;
@@ -30,7 +32,7 @@ create table public.app_metadata (
   constraint app_metadata_singleton_chk check ((id = 1))
 ) TABLESPACE pg_default;
 
--- 2. PROFILES (Com tipo de usuário, país e identificador de documento)
+-- 2. PROFILES
 create table public.profiles (
   id uuid not null,
   name text null,
@@ -43,7 +45,8 @@ create table public.profiles (
   document_number text null,
   cpf text null,
   nickname text null,
-  plan text not null default 'usuario'::text,
+  plan text not null default 'free'::text,
+  subscription_origin text not null default 'free'::text,
   subscription_status text not null default 'trial'::text,
   subscription_expires_at timestamp with time zone null,
   trial_started_at timestamp with time zone null default now(),
@@ -63,7 +66,10 @@ create table public.profiles (
     (user_type = any (array['usuario'::text, 'empresa'::text]))
   ),
   constraint profiles_plan_check check (
-    (plan = any (array['usuario'::text, 'empresa'::text, 'free'::text, 'plus'::text, 'premium'::text, 'casal'::text]))
+    (plan = any (array['free'::text, 'pro_usuario'::text, 'pro_empresa'::text]))
+  ),
+  constraint profiles_subscription_origin_check check (
+    (subscription_origin = any (array['free'::text, 'app_store'::text, 'google_play'::text, 'stripe'::text]))
   )
 ) TABLESPACE pg_default;
 
@@ -92,7 +98,7 @@ create table public.bank_connections (
 
 create index IF not exists idx_bank_connections_user_id on public.bank_connections using btree (user_id) TABLESPACE pg_default;
 
--- 4. CARDS (Com data_origin, institution_id, institution_name, brand)
+-- 4. CARDS
 create table public.cards (
   id uuid not null default gen_random_uuid (),
   user_id uuid not null,
@@ -273,7 +279,7 @@ create table public.shared_account_invites (
 create index IF not exists idx_shared_account_invites_owner on public.shared_account_invites using btree (owner_id) TABLESPACE pg_default;
 create index IF not exists idx_shared_account_invites_email on public.shared_account_invites using btree (partner_email) TABLESPACE pg_default;
 
--- 11. SHARED ACCOUNTS
+-- 12. SHARED ACCOUNTS
 create table public.shared_accounts (
   id uuid not null default gen_random_uuid (),
   owner_id uuid not null,
@@ -294,7 +300,7 @@ create table public.shared_accounts (
 create index IF not exists idx_shared_accounts_owner on public.shared_accounts using btree (owner_id) TABLESPACE pg_default;
 create index IF not exists idx_shared_accounts_partner on public.shared_accounts using btree (partner_id) TABLESPACE pg_default;
 
--- 12. SMS VERIFICATIONS
+-- 13. SMS VERIFICATIONS
 create table public.sms_verifications (
   id uuid not null default gen_random_uuid (),
   email text not null,
@@ -308,7 +314,7 @@ create table public.sms_verifications (
 
 create index IF not exists idx_sms_verifications_email on public.sms_verifications using btree (email) TABLESPACE pg_default;
 
--- 13. SUBSCRIPTIONS (Com data_origin, is_fixed_monthly)
+-- 14. SUBSCRIPTIONS
 create table public.subscriptions (
   id uuid not null default gen_random_uuid (),
   user_id uuid not null,
@@ -346,34 +352,7 @@ create table public.subscriptions (
 create index IF not exists idx_subscriptions_user_id on public.subscriptions using btree (user_id) TABLESPACE pg_default;
 create index IF not exists idx_subscriptions_deleted_at on public.subscriptions using btree (deleted_at) TABLESPACE pg_default;
 
--- 14. TASKS
-create table public.tasks (
-  id uuid not null default gen_random_uuid (),
-  user_id uuid not null,
-  title text not null,
-  description text null,
-  due_date timestamp with time zone null,
-  priority text not null default 'medium'::text,
-  is_completed boolean not null default false,
-  linked_transaction_id uuid null,
-  completed_at timestamp with time zone null,
-  created_at timestamp with time zone not null default now(),
-  updated_at timestamp with time zone not null default now(),
-  deleted_at timestamp with time zone null,
-  constraint tasks_pkey primary key (id),
-  constraint tasks_linked_transaction_id_fkey foreign KEY (linked_transaction_id) references transactions (id) on delete set null,
-  constraint tasks_user_id_fkey foreign KEY (user_id) references profiles (id) on delete CASCADE,
-  constraint tasks_priority_check check (
-    (
-      priority = any (array['low'::text, 'medium'::text, 'high'::text])
-    )
-  )
-) TABLESPACE pg_default;
-
-create index IF not exists idx_tasks_user_id on public.tasks using btree (user_id) TABLESPACE pg_default;
-create index IF not exists idx_tasks_deleted_at on public.tasks using btree (deleted_at) TABLESPACE pg_default;
-
--- 15. TRANSACTIONS (Com data_origin, institution_id, institution_name)
+-- 15. TRANSACTIONS
 create table public.transactions (
   id uuid not null default gen_random_uuid (),
   user_id uuid not null,
@@ -407,3 +386,30 @@ create table public.transactions (
 create index IF not exists idx_transactions_user_id on public.transactions using btree (user_id) TABLESPACE pg_default;
 create index IF not exists idx_transactions_date on public.transactions using btree (date desc) TABLESPACE pg_default;
 create index IF not exists idx_transactions_deleted_at on public.transactions using btree (deleted_at) TABLESPACE pg_default;
+
+-- 16. TASKS (Criada após TRANSACTIONS devido à FK tasks_linked_transaction_id_fkey)
+create table public.tasks (
+  id uuid not null default gen_random_uuid (),
+  user_id uuid not null,
+  title text not null,
+  description text null,
+  due_date timestamp with time zone null,
+  priority text not null default 'medium'::text,
+  is_completed boolean not null default false,
+  linked_transaction_id uuid null,
+  completed_at timestamp with time zone null,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now(),
+  deleted_at timestamp with time zone null,
+  constraint tasks_pkey primary key (id),
+  constraint tasks_linked_transaction_id_fkey foreign KEY (linked_transaction_id) references transactions (id) on delete set null,
+  constraint tasks_user_id_fkey foreign KEY (user_id) references profiles (id) on delete CASCADE,
+  constraint tasks_priority_check check (
+    (
+      priority = any (array['low'::text, 'medium'::text, 'high'::text])
+    )
+  )
+) TABLESPACE pg_default;
+
+create index IF not exists idx_tasks_user_id on public.tasks using btree (user_id) TABLESPACE pg_default;
+create index IF not exists idx_tasks_deleted_at on public.tasks using btree (deleted_at) TABLESPACE pg_default;

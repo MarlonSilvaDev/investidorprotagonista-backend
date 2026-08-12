@@ -1,0 +1,1 @@
+{"version":3,"file":"BrapiService.d.ts","sourceRoot":"","sources":["../../../src/shared/utils/BrapiService.ts"],"names":[],"mappings":"AAEA,qBAAa,YAAY;IACvB,OAAO,CAAC,MAAM,CAAC,OAAO,CAA2B;IACjD,OAAO,CAAC,MAAM,CAAC,KAAK,CAA2B;WAElC,QAAQ,CAAC,OAAO,EAAE,MAAM,EAAE;WAa1B,YAAY,CAAC,MAAM,EAAE,MAAM;CAczC"}

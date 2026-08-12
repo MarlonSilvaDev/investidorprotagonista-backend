@@ -6,22 +6,25 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const vitest_1 = require("vitest");
 const supertest_1 = __importDefault(require("supertest"));
 const express_1 = __importDefault(require("express"));
+const routes_1 = require("../../routes");
 // ─── MOCK SUPABASE ───
-const mockSupabase = {
-    auth: {
-        getUser: vitest_1.vi.fn(),
-        signInWithPassword: vitest_1.vi.fn(),
-        admin: {
-            createUser: vitest_1.vi.fn(),
-            updateUserById: vitest_1.vi.fn(),
-            getUserById: vitest_1.vi.fn(),
+const { mockSupabase } = vitest_1.vi.hoisted(() => ({
+    mockSupabase: {
+        auth: {
+            getUser: vitest_1.vi.fn(),
+            signInWithPassword: vitest_1.vi.fn(),
+            admin: {
+                createUser: vitest_1.vi.fn(),
+                updateUserById: vitest_1.vi.fn(),
+                getUserById: vitest_1.vi.fn(),
+            },
+            signInWithIdToken: vitest_1.vi.fn(),
+            refreshSession: vitest_1.vi.fn(),
         },
-        signInWithIdToken: vitest_1.vi.fn(),
-        refreshSession: vitest_1.vi.fn(),
+        from: vitest_1.vi.fn(),
     },
-    from: vitest_1.vi.fn(),
-};
-vitest_1.vi.mock('../../database/supabase', () => ({
+}));
+vitest_1.vi.mock('../../config/supabase', () => ({
     supabase: mockSupabase,
     supabaseAdmin: mockSupabase,
 }));
@@ -53,9 +56,7 @@ vitest_1.vi.mock('stripe', () => {
 function buildApp() {
     const app = (0, express_1.default)();
     app.use(express_1.default.json());
-    // Import routes - we'll use the same structure as the real app
-    const { routes } = require('../../infra/http/routes');
-    app.use(routes);
+    app.use(routes_1.routes);
     return app;
 }
 const mockUser = {
@@ -69,7 +70,7 @@ function setupAuthenticatedUser() {
         error: null,
     });
 }
-function setupProfile(status = 'active', expiresAt) {
+function setupProfile(status = 'active', expiresAt, tableData = null) {
     const profile = {
         id: mockUser.id,
         subscription_status: status,
@@ -80,17 +81,31 @@ function setupProfile(status = 'active', expiresAt) {
         email_registrado: true,
         provider_type: 'email',
         stripe_customer_id: null,
+        user_type: 'usuario',
+        plan: 'usuario',
+        country: 'BR',
+        role: 'padrao',
     };
-    mockSupabase.from.mockReturnValue({
+    const createChain = (data) => ({
         select: vitest_1.vi.fn().mockReturnThis(),
         eq: vitest_1.vi.fn().mockReturnThis(),
-        single: vitest_1.vi.fn().mockResolvedValue({ data: profile, error: null }),
-        update: vitest_1.vi.fn().mockReturnThis(),
-        match: vitest_1.vi.fn().mockReturnThis(),
-        insert: vitest_1.vi.fn().mockReturnThis(),
-        delete: vitest_1.vi.fn().mockReturnThis(),
+        or: vitest_1.vi.fn().mockReturnThis(),
         order: vitest_1.vi.fn().mockReturnThis(),
         gt: vitest_1.vi.fn().mockReturnThis(),
+        match: vitest_1.vi.fn().mockReturnThis(),
+        single: vitest_1.vi.fn().mockResolvedValue({ data, error: null }),
+        maybeSingle: vitest_1.vi.fn().mockResolvedValue({ data, error: null }),
+        update: vitest_1.vi.fn().mockReturnThis(),
+        upsert: vitest_1.vi.fn().mockResolvedValue({ data, error: null }),
+        insert: vitest_1.vi.fn().mockReturnThis(),
+        delete: vitest_1.vi.fn().mockReturnThis(),
+        then: (resolve) => resolve({ data, error: null }),
+    });
+    mockSupabase.from.mockImplementation((table) => {
+        if (table === 'profiles') {
+            return createChain(profile);
+        }
+        return createChain(tableData);
     });
     return profile;
 }
@@ -98,6 +113,7 @@ function setupProfile(status = 'active', expiresAt) {
     let app;
     (0, vitest_1.beforeEach)(() => {
         vitest_1.vi.clearAllMocks();
+        mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: mockUser.id, email: mockUser.email } }, error: null });
         process.env.JWT_SECRET = 'test-jwt-secret';
         process.env.STRIPE_SECRET_KEY = 'sk_test_mock';
         process.env.STRIPE_WEBHOOK_SECRET = 'whsec_mock';
@@ -118,13 +134,18 @@ function setupProfile(status = 'active', expiresAt) {
                 error: null,
             });
             mockSupabase.from.mockReturnValue({
+                select: vitest_1.vi.fn().mockReturnThis(),
+                eq: vitest_1.vi.fn().mockReturnThis(),
+                maybeSingle: vitest_1.vi.fn().mockResolvedValue({ data: null, error: null }),
                 update: vitest_1.vi.fn().mockReturnThis(),
-                eq: vitest_1.vi.fn().mockResolvedValue({ error: null }),
+                upsert: vitest_1.vi.fn().mockResolvedValue({ error: null }),
             });
             const response = await (0, supertest_1.default)(app)
                 .post('/auth/register')
                 .send({
                 name: 'New User',
+                documentNumber: '52998224725',
+                phone: '11999999999',
                 email: 'newuser@example.com',
                 password: 'SecurePass1@',
                 locale: 'pt-BR',
@@ -701,4 +722,6 @@ function setupProfile(status = 'active', expiresAt) {
         });
     });
 });
+// Test requests use plain JSON; credential encryption is tested separately.
+vitest_1.vi.mock('../../shared/middlewares/decryptAuthCredentials', () => ({ decryptAuthCredentials: (_req, _res, next) => next() }));
 //# sourceMappingURL=api.test.js.map

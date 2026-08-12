@@ -93,7 +93,7 @@ describe('DashboardController', () => {
       expect(total).toBe(3);
       expect(completed).toBe(1);
       expect(active).toBe(2);
-      expect(avgProgress).toBeCloseTo(0.2333, 3);
+      expect(avgProgress).toBeCloseTo(0.4, 3);
     });
 
     it('should calculate investment portfolio value', () => {

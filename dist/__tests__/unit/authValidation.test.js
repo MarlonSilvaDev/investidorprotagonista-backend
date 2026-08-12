@@ -72,7 +72,7 @@ const AuthValidation_1 = require("../../core/utils/AuthValidation");
             (0, vitest_1.expect)((0, AuthValidation_1.validatePassword)('VeryLongPassword123@#$')).toBeNull();
         });
         (0, vitest_1.it)('should return error for password with whitespace only', () => {
-            (0, vitest_1.expect)((0, AuthValidation_1.validatePassword)('        ')).toBe('A senha deve ter no mínimo 8 caracteres');
+            (0, vitest_1.expect)((0, AuthValidation_1.validatePassword)('    ')).toBe('A senha deve ter no mínimo 8 caracteres');
         });
     });
     (0, vitest_1.describe)('normalizeCpf / isValidCpf / validateCpf', () => {

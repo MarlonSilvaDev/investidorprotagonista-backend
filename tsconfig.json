@@ -15,7 +15,7 @@
     "rootDir": "./src",
     "typeRoots": [
       "./node_modules/@types",
-      "./src/types"
+      "src/shared/types"
     ]
   },
   "ts-node": {

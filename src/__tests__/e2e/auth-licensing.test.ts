@@ -40,7 +40,7 @@ describe('E2E - Licensing Middleware Flow', () => {
   it('should allow access to user with active license', () => {
     const user = {
       id: 'user-1',
-      plan: 'premium',
+      plan: 'pro_usuario',
       license_expiry: '2026-12-31',
       enabled_modules: ['transactions', 'goals', 'investments'],
     };
@@ -82,32 +82,32 @@ describe('E2E - Licensing Middleware Flow', () => {
     expect(hasBasicAccess).toBe(true);
   });
 
-  it('should block premium modules for free users', () => {
-    const freeUser = {
-      plan: 'free',
-      enabled_modules: ['transactions', 'goals', 'tasks'],
+  it('should allow pro_usuario modules for pro_usuario users', () => {
+    const proUser = {
+      plan: 'pro_usuario',
+      enabled_modules: ['transactions', 'goals', 'tasks', 'investments', 'cards', 'subscriptions', 'open_finance', 'shared_accounts'],
     };
 
-    const premiumModules = ['investments', 'cards', 'subscriptions', 'shared'];
-    const hasPremiumAccess = premiumModules.some(m =>
-      freeUser.enabled_modules.includes(m)
+    const proUserModules = ['investments', 'cards', 'subscriptions', 'open_finance', 'shared_accounts'];
+    const hasProAccess = proUserModules.every(m =>
+      proUser.enabled_modules.includes(m)
     );
 
-    expect(hasPremiumAccess).toBe(false);
+    expect(hasProAccess).toBe(true);
   });
 
-  it('should allow premium modules for premium users', () => {
-    const premiumUser = {
-      plan: 'premium',
-      enabled_modules: ['transactions', 'goals', 'tasks', 'investments', 'cards', 'subscriptions', 'shared'],
+  it('should allow company modules for pro_empresa users', () => {
+    const companyUser = {
+      plan: 'pro_empresa',
+      enabled_modules: ['transactions', 'goals', 'tasks', 'investments', 'cards', 'subscriptions', 'open_finance', 'shared_accounts', 'whatsapp_bot', 'backup', 'multi_user', 'company_reports'],
     };
 
-    const premiumModules = ['investments', 'cards', 'subscriptions', 'shared'];
-    const hasPremiumAccess = premiumModules.every(m =>
-      premiumUser.enabled_modules.includes(m)
+    const companyModules = ['multi_user', 'company_reports', 'whatsapp_bot'];
+    const hasCompanyAccess = companyModules.every(m =>
+      companyUser.enabled_modules.includes(m)
     );
 
-    expect(hasPremiumAccess).toBe(true);
+    expect(hasCompanyAccess).toBe(true);
   });
 
   it('should allow admin access to all modules regardless of plan', () => {

@@ -39,13 +39,67 @@ Cliente: `src/infra/database/supabase.ts` (`@supabase/supabase-js`).
 ## Estrutura
 
 ```
-src/
-├── core/              # helpers de auth, erros, utils
-├── infra/
-│   ├── database/      # cliente Supabase (supabase.ts)
-│   └── http/          # Express: controllers, routes, middlewares
-└── modules/           # regras de negócio por domínio
-```
+├── src/
+│   ├── config/                     # Configurações
+│   │   ├── env.ts
+│   │   ├── database.ts
+│   │   └── index.ts
+│   │
+│   ├── modules/                    # Arquitetura por features (recomendado)
+│   │   ├── users/
+│   │   │   ├── users.controller.ts
+│   │   │   ├── users.service.ts
+│   │   │   ├── users.repository.ts
+│   │   │   ├── users.routes.ts
+│   │   │   ├── users.schema.ts      # Validação (Zod)
+│   │   │   ├── users.types.ts
+│   │   │   └── index.ts
+│   │   │
+│   │   ├── auth/
+│   │   │   ├── auth.controller.ts
+│   │   │   ├── auth.service.ts
+│   │   │   ├── auth.routes.ts
+│   │   │   └── ...
+│   │   │
+│   │   └── products/
+│   │       └── ...
+│   │
+│   ├── shared/                     # Código compartilhado
+│   │   ├── middlewares/
+│   │   │   ├── auth.middleware.ts
+│   │   │   ├── error.middleware.ts
+│   │   │   ├── validate.middleware.ts
+│   │   │   └── logger.middleware.ts
+│   │   ├── errors/
+│   │   │   ├── AppError.ts
+│   │   │   └── index.ts
+│   │   ├── utils/
+│   │   │   ├── logger.ts
+│   │   │   └── helpers.ts
+│   │   └── types/
+│   │       └── express.d.ts         # Extensão de tipos do Express
+│   │
+│   ├── app.ts                      # Configuração do Express
+│   └── server.ts                   # Ponto de entrada (sobe o servidor)
+│
+├── tests/
+│   ├── unit/
+│   ├── integration/
+│   └── e2e/
+│
+├── supabase/                         
+│   ├── schema.supabase
+│   └── migrations/
+│
+├── .env
+├── .env.example
+├── .gitignore
+├── package.json
+├── tsconfig.json
+├── tsconfig.build.json
+├── eslint.config.js
+├── prettier.config.js
+└── README.md
 
 Scripts SQL na raiz:
 

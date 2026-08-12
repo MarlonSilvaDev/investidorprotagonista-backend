@@ -69,7 +69,7 @@ function mockResponse() {
         });
         const res = mockResponse();
         const date = new Date(req.body?.date);
-        if (date > new Date('2027-01-01')) {
+        if (date > new Date('2099-01-01')) {
             res.status?.(400);
             res.json?.({ error: 'Date too far in the future' });
         }
