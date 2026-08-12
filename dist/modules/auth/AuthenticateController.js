@@ -19,28 +19,42 @@ function frontendLoginUrl() {
     return `${base}/login`;
 }
 async function getProfileByUserId(userId) {
-    const { data, error } = await supabase_1.supabaseAdmin
-        .from('profiles')
-        .select('id, email, name, email_registrado, provider_type, role, cpf')
-        .eq('id', userId)
-        .maybeSingle();
-    if (error) {
-        throw error;
+    try {
+        const { data, error } = await supabase_1.supabaseAdmin
+            .from('profiles')
+            .select('id, email, name, email_registrado, provider_type, role, cpf')
+            .eq('id', userId)
+            .maybeSingle();
+        if (error) {
+            console.error('[GET_PROFILE_BY_USER_ID ERROR]', error.message);
+            return null;
+        }
+        return data;
     }
-    return data;
+    catch (err) {
+        console.error('[GET_PROFILE_BY_USER_ID EXCEPTION]', err?.message || err);
+        return null;
+    }
 }
 async function getProfileByEmail(email) {
     if (!email)
         return null;
-    const { data, error } = await supabase_1.supabaseAdmin
-        .from('profiles')
-        .select('id, email, name, phone_number, email_registrado, provider_type, role, cpf, document_number')
-        .eq('email', email)
-        .maybeSingle();
-    if (error) {
-        throw error;
+    try {
+        const { data, error } = await supabase_1.supabaseAdmin
+            .from('profiles')
+            .select('id, email, name, phone_number, email_registrado, provider_type, role, cpf, document_number')
+            .eq('email', email.trim().toLowerCase())
+            .maybeSingle();
+        if (error) {
+            console.error('[GET_PROFILE_BY_EMAIL ERROR]', error.message);
+            return null;
+        }
+        return data;
     }
-    return data;
+    catch (err) {
+        console.error('[GET_PROFILE_BY_EMAIL EXCEPTION]', err?.message || err);
+        return null;
+    }
 }
 async function getProfileByDocument(documentNumber, cpf) {
     const doc = documentNumber || cpf;
@@ -176,30 +190,33 @@ class AuthenticateController {
                     : profileError.message || 'Não foi possível criar a conta',
             });
         }
-        // Gera código SMS (OTP)
-        const smsCode = Math.floor(100000 + Math.random() * 900000).toString();
-        // Salva no banco para validação posterior
-        await supabase_1.supabaseAdmin.from('sms_verifications').insert({
-            email,
-            phone,
-            code: smsCode,
-            channel: verificationChannel,
-        });
-        // Envia o código através do canal selecionado (whatsapp, telegram, signal, sms)
-        await (0, SmsService_1.sendVerificationCode)({
-            to: phone,
-            code: smsCode,
-            channel: verificationChannel,
-            locale: request.body.locale,
-        });
+        // Envia e-mail de confirmação de conta via NotifyGW
+        try {
+            const confirmToken = (0, AuthTokenService_1.signAuthMailToken)({
+                sub: data.user.id,
+                email,
+                type: 'email_confirm',
+            });
+            const backendUrl = (process.env.BACKEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+            const confirmUrl = `${backendUrl}/auth/confirm-email?token=${confirmToken}`;
+            await (0, MailService_1.sendConfirmationEmail)({
+                to: email,
+                confirmUrl,
+                locale: request.body.locale,
+            });
+            console.log(`[REGISTER MAIL] E-mail de confirmação enviado para ${email}`);
+        }
+        catch (mailErr) {
+            console.error('[REGISTER MAIL ERROR] Falha ao enviar e-mail de confirmação:', mailErr?.message || mailErr);
+        }
         return response.status(201).json({
             id: data.user.id,
             email,
             cpf,
-            requires_email_confirmation: false,
+            requires_email_confirmation: true,
             requires_sms_verification: true,
             provider_type: 'email',
-            message: 'Cadastro realizado. Enviamos um código por SMS para você confirmar a conta.',
+            message: 'Cadastro realizado! Enviamos um e-mail de confirmação. Você também pode validar sua conta por WhatsApp/SMS.',
         });
     }
     async verifySms(request, response) {
@@ -208,19 +225,26 @@ class AuthenticateController {
         if (!email || !code) {
             return response.status(400).json({ message: 'E-mail e código são obrigatórios' });
         }
-        // Busca o código mais recente não expirado
+        // Busca o código mais recente não verificado para este e-mail
         const { data: verification, error } = await supabase_1.supabaseAdmin
             .from('sms_verifications')
             .select('*')
             .eq('email', email)
             .eq('code', code)
             .eq('verified', false)
-            .gt('expires_at', new Date().toISOString())
             .order('created_at', { ascending: false })
             .limit(1)
             .maybeSingle();
-        if (error || !verification) {
-            return response.status(400).json({ message: 'Código inválido ou expirado' });
+        if (error) {
+            console.error('[VERIFY SMS DB ERROR]', error);
+            return response.status(500).json({ message: 'Erro ao consultar código no banco de dados' });
+        }
+        if (!verification) {
+            return response.status(400).json({ message: 'Código inválido ou não encontrado' });
+        }
+        // Verifica se expirou
+        if (verification.expires_at && new Date(verification.expires_at) < new Date()) {
+            return response.status(400).json({ message: 'Código expirado. Solicite um novo código.' });
         }
         // Marca como verificado
         await supabase_1.supabaseAdmin
@@ -233,10 +257,16 @@ class AuthenticateController {
             return response.status(404).json({ message: 'Usuário não encontrado' });
         }
         // Ativa a conta
-        await supabase_1.supabaseAdmin
+        const { error: updateError } = await supabase_1.supabaseAdmin
             .from('profiles')
-            .update({ email_registrado: true })
+            .update({ email_registrado: true, updated_at: new Date().toISOString() })
             .eq('id', profile.id);
+        if (updateError) {
+            console.error('[VERIFY SMS PROFILE UPDATE ERROR]', updateError);
+        }
+        else {
+            console.log(`[VERIFY SMS SUCCESS] Conta ativada com sucesso (email_registrado=true) para ${email} (id=${profile.id})`);
+        }
         return response.json({
             message: 'Celular validado com sucesso! Agora você pode entrar na sua conta.',
             user: {
@@ -244,7 +274,6 @@ class AuthenticateController {
                 email: profile.email,
                 name: profile.name,
             },
-            // O front deve redirecionar para o login após esta mensagem
             requires_login: true
         });
     }
@@ -264,17 +293,29 @@ class AuthenticateController {
             .order('created_at', { ascending: false })
             .limit(1)
             .maybeSingle();
-        const phone = profile?.phone_number || recentVerif?.phone;
+        const phone = String(request.body.phone || '').trim() ||
+            profile?.phone_number ||
+            recentVerif?.phone;
         if (!phone) {
             return response.status(404).json({ message: 'Telefone do usuário não encontrado' });
         }
         const smsCode = Math.floor(100000 + Math.random() * 900000).toString();
-        await supabase_1.supabaseAdmin.from('sms_verifications').insert({
+        const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+        // Insere na tabela sms_verifications (colunas padrão: email, phone, code, expires_at)
+        const { error: insertError } = await supabase_1.supabaseAdmin.from('sms_verifications').insert({
             email,
             phone,
             code: smsCode,
-            channel,
+            expires_at: expiresAt,
         });
+        if (insertError) {
+            console.error('[SMS_VERIFICATION INSERT ERROR]', insertError);
+            return response.status(500).json({
+                message: `Não foi possível registrar o código de verificação: ${insertError.message}`,
+            });
+        }
+        console.log(`[SMS_VERIFICATION SUCCESS] Código ${smsCode} gerado e salvo para ${email} (${phone}) via ${channel}`);
+        // Dispara a mensagem pelo gateway NotifyGW
         await (0, SmsService_1.sendVerificationCode)({
             to: phone,
             code: smsCode,
@@ -285,7 +326,6 @@ class AuthenticateController {
             whatsapp: 'WhatsApp',
             sms: 'SMS',
             telegram: 'Telegram',
-            signal: 'Signal',
         };
         return response.json({
             message: `Código enviado via ${channelLabels[channel] || channel}!`,
@@ -342,10 +382,49 @@ class AuthenticateController {
                 message: error?.message ?? 'E-mail ou senha inválidos',
             });
         }
-        const profile = await getProfileByUserId(data.user.id);
-        if (!profile?.email_registrado) {
+        let profile = await getProfileByUserId(data.user.id);
+        if (!profile) {
+            profile = await getProfileByEmail(email);
+        }
+        console.log('[LOGIN VERIFICATION CHECK]', {
+            userId: data.user.id,
+            email,
+            profileFound: !!profile,
+            email_registrado: profile?.email_registrado,
+        });
+        // Se o perfil não existir na tabela public.profiles (ex: registro interrompido ou usuário criado no Auth do Supabase)
+        if (!profile) {
+            console.warn(`[LOGIN RECOVERY] Perfil não encontrado na tabela profiles para ${email} (id: ${data.user.id}). Criando perfil automático...`);
+            const { error: createErr } = await supabase_1.supabaseAdmin
+                .from('profiles')
+                .upsert({
+                id: data.user.id,
+                email,
+                name: data.user.user_metadata?.name || email.split('@')[0] || 'Investidor',
+                phone_number: data.user.user_metadata?.phone || null,
+                email_registrado: true,
+                user_type: 'usuario',
+                plan: 'free',
+                country: 'BR',
+                role: 'padrao',
+            }, { onConflict: 'id' });
+            if (createErr) {
+                console.error('[LOGIN RECOVERY ERROR]', createErr.message);
+            }
+            else {
+                profile = await getProfileByUserId(data.user.id);
+                console.log(`[LOGIN RECOVERY SUCCESS] Perfil recriado e ativado com sucesso para ${email}`);
+            }
+        }
+        if (!profile) {
+            console.error('[LOGIN ERROR] Não foi possível encontrar ou recriar o perfil na tabela profiles para', email);
             return response.status(403).json({
-                message: 'Confirme seu e-mail antes de entrar. Verifique sua caixa de entrada.',
+                message: 'Não foi possível carregar o perfil do usuário. Tente novamente.',
+            });
+        }
+        if (!profile.email_registrado) {
+            return response.status(403).json({
+                message: 'Sua conta ainda não foi ativada. Confirme seu e-mail ou valide o código recebido por WhatsApp/SMS.',
             });
         }
         if (data.session?.access_token) {

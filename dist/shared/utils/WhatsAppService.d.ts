@@ -1,7 +1,5 @@
-export declare class WhatsAppService {
-    private static apiUrl;
-    private static apiKey;
-    static sendMessage(to: String, message: string): Promise<void>;
-    static sendAssetAlert(to: string, asset: string, price: number, change: number): Promise<void>;
-}
+/**
+ * Re-exporta o WhatsAppService do core para manter imports legados funcionando.
+ */
+export { WhatsAppService } from '../../core/utils/WhatsAppService';
 //# sourceMappingURL=WhatsAppService.d.ts.map

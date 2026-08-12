@@ -1,42 +1,10 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.sendConfirmationEmail = sendConfirmationEmail;
 exports.sendPasswordResetEmail = sendPasswordResetEmail;
 exports.sendSharedInviteEmail = sendSharedInviteEmail;
 const i18n_1 = require("./i18n");
+const NotifyGwService_1 = require("./NotifyGwService");
 /** E-mail de confirmação — com suporte a idioma. */
 async function sendConfirmationEmail(params) {
     const locale = (0, i18n_1.resolveLocale)(params.locale);
@@ -83,33 +51,13 @@ async function sendSharedInviteEmail(params) {
     }[locale];
     await sendMail(params.to, copy.subject, copy.body);
 }
-// ─── INTERNAL ───
-function requireEnv(name) {
-    const value = process.env[name];
-    if (!value) {
-        throw new Error(`${name} não configurado no .env`);
-    }
-    return value;
-}
+// ─── INTERNAL — envia via NotifyGW ───
 async function sendMail(to, subject, html) {
-    const { default: nodemailer } = await Promise.resolve().then(() => __importStar(require('nodemailer')));
-    const port = Number(process.env.SMTP_PORT || 465);
-    const transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST || 'smtp.gmail.com',
-        port,
-        secure: port === 465,
-        auth: {
-            user: requireEnv('SMTP_USER'),
-            pass: requireEnv('SMTP_PASS').replace(/\s+/g, ''),
-        },
-    });
-    const fromName = process.env.SMTP_FROM_NAME || 'Investidor Protagonista';
-    const fromEmail = process.env.SMTP_FROM_EMAIL || requireEnv('SMTP_USER');
-    await transporter.sendMail({
-        from: `"${fromName}" <${fromEmail}>`,
-        to,
-        subject,
-        html,
-    });
+    const result = await (0, NotifyGwService_1.sendEmail)(to, subject, html);
+    if (!result.ok) {
+        console.error(`[MAIL] Falha ao enviar e-mail para ${to} via NotifyGW:`, result.error);
+        throw new Error(`Falha ao enviar e-mail: ${result.error}`);
+    }
+    console.log(`[MAIL] E-mail enfileirado para ${to} → outbox_id=${result.outboxId}`);
 }
 //# sourceMappingURL=MailService.js.map

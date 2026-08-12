@@ -1,7 +1,10 @@
+/**
+ * Wrapper de compatibilidade — redireciona para NotifyGwService.
+ * Mantém a interface estática para não quebrar chamadas existentes
+ * em IntegrationController e outros módulos.
+ */
 export declare class WhatsAppService {
-    private static apiUrl;
-    private static apiKey;
-    static sendMessage(to: String, message: string): Promise<void>;
+    static sendMessage(to: string, message: string): Promise<void>;
     static sendAssetAlert(to: string, asset: string, price: number, change: number): Promise<void>;
 }
 //# sourceMappingURL=WhatsAppService.d.ts.map

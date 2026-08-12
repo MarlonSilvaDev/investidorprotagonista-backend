@@ -15,7 +15,7 @@ const authenticateRoutes = (0, express_1.Router)();
 exports.authenticateRoutes = authenticateRoutes;
 const authenticateController = new AuthenticateController_1.AuthenticateController();
 const frontendLoginUrl = () => {
-    const base = (process.env.FRONTEND_URL || 'http://localhost:8080').replace(/\/$/, '');
+    const base = (process.env.FRONTEND_URL || '').replace(/\/$/, '');
     return `${base}/login`;
 };
 /** Confirmação de e-mail (link enviado pelo nosso SMTP). */

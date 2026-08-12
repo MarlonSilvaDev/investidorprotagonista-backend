@@ -7,8 +7,11 @@ import { routes } from './routes';
 import { errorHandler } from './shared/middlewares/errorHandler';
 import { renderAuthCallbackGatewayPage } from './shared/utils/htmlpages/emailLinkErrorPage';
 
+import { generalLimiter } from './shared/middlewares/rateLimiters';
+
 const app = express();
 
+app.use(generalLimiter);
 app.use(
   cors({
     origin: true,

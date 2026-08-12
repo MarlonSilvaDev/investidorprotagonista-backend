@@ -1,19 +1,5 @@
-import { type AppLocale } from './i18n';
-export type VerificationChannel = 'whatsapp' | 'telegram' | 'signal' | 'sms';
-interface SendVerificationCodeParams {
-    to: string;
-    code: string;
-    channel?: VerificationChannel;
-    locale?: AppLocale;
-}
 /**
- * Envia o código de verificação através do canal selecionado:
- * - 'sms': Twilio SMS API
- * - 'whatsapp': WhatsApp Gateway API (Evolution API / Z-API / UltraMsg)
- * - 'telegram': Telegram Bot API
- * - 'signal': Signal REST API
+ * Re-exporta o SmsService do core para manter imports legados funcionando.
  */
-export declare function sendVerificationCode({ to, code, channel, locale: rawLocale, }: SendVerificationCodeParams): Promise<boolean>;
-export declare const sendVerificationSms: (params: SendVerificationCodeParams) => Promise<boolean>;
-export {};
+export { sendVerificationCode, sendVerificationSms, type VerificationChannel } from '../../core/utils/SmsService';
 //# sourceMappingURL=SmsService.d.ts.map

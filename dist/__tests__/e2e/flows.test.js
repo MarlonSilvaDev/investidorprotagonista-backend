@@ -32,6 +32,11 @@ vitest_1.vi.mock('../../config/supabase', () => ({
 vitest_1.vi.mock('../../core/utils/MailService', () => ({
     sendConfirmationEmail: vitest_1.vi.fn().mockResolvedValue(undefined),
     sendPasswordResetEmail: vitest_1.vi.fn().mockResolvedValue(undefined),
+    sendSharedInviteEmail: vitest_1.vi.fn().mockResolvedValue(undefined),
+}));
+vitest_1.vi.mock('../../core/utils/SmsService', () => ({
+    sendVerificationCode: vitest_1.vi.fn().mockResolvedValue(true),
+    sendVerificationSms: vitest_1.vi.fn().mockResolvedValue(true),
 }));
 vitest_1.vi.mock('stripe', () => {
     const StripeMock = vitest_1.vi.fn().mockImplementation(() => ({

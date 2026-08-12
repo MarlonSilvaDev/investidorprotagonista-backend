@@ -3,6 +3,11 @@ import express from 'express';
 import { AuthenticateController } from '../modules/auth/AuthenticateController';
 import { decryptAuthCredentials } from '../shared/middlewares/decryptAuthCredentials';
 import { ensureAuthenticated } from '../shared/middlewares/ensureAuthenticated';
+import {
+  authLimiter,
+  otpSendLimiter,
+  otpVerifyLimiter,
+} from '../shared/middlewares/rateLimiters';
 import { renderEmailConfirmedPage } from '../shared/utils/htmlpages/emailConfirmedPage';
 import { renderEmailLinkErrorPage } from '../shared/utils/htmlpages/emailLinkErrorPage';
 
@@ -10,7 +15,7 @@ const authenticateRoutes = Router();
 const authenticateController = new AuthenticateController();
 
 const frontendLoginUrl = () => {
-  const base = (process.env.FRONTEND_URL || 'http://localhost:8080').replace(
+  const base = (process.env.FRONTEND_URL || '').replace(
     /\/$/,
     ''
   );
@@ -53,22 +58,24 @@ authenticateRoutes.post(
   (req, res) => authenticateController.resetPassword(req, res)
 );
 
-authenticateRoutes.post('/login', decryptAuthCredentials, (req, res) =>
+// ─── ROTAS DE AUTENTICAÇÃO PROTEGIDAS POR RATE-LIMITER ANTI-BOT ───
+
+authenticateRoutes.post('/login', authLimiter, decryptAuthCredentials, (req, res) =>
   authenticateController.login(req, res)
 );
-authenticateRoutes.post('/register', decryptAuthCredentials, (req, res) =>
+authenticateRoutes.post('/register', authLimiter, decryptAuthCredentials, (req, res) =>
   authenticateController.register(req, res)
 );
-authenticateRoutes.post('/verify-sms', decryptAuthCredentials, (req, res) =>
+authenticateRoutes.post('/verify-sms', otpVerifyLimiter, decryptAuthCredentials, (req, res) =>
   authenticateController.verifySms(req, res)
 );
-authenticateRoutes.post('/resend-verification-code', decryptAuthCredentials, (req, res) =>
+authenticateRoutes.post('/resend-verification-code', otpSendLimiter, decryptAuthCredentials, (req, res) =>
   authenticateController.sendVerificationCode(req, res)
 );
-authenticateRoutes.post('/send-verification-code', decryptAuthCredentials, (req, res) =>
+authenticateRoutes.post('/send-verification-code', otpSendLimiter, decryptAuthCredentials, (req, res) =>
   authenticateController.sendVerificationCode(req, res)
 );
-authenticateRoutes.post('/forgot-password', decryptAuthCredentials, (req, res) =>
+authenticateRoutes.post('/forgot-password', authLimiter, decryptAuthCredentials, (req, res) =>
   authenticateController.forgotPassword(req, res)
 );
 authenticateRoutes.post(
@@ -78,7 +85,7 @@ authenticateRoutes.post(
   (req, res) => authenticateController.changePassword(req, res)
 );
 
-authenticateRoutes.post('/google', (req, res) => authenticateController.google(req, res));
+authenticateRoutes.post('/google', authLimiter, (req, res) => authenticateController.google(req, res));
 authenticateRoutes.post(
   '/complete-cpf',
   ensureAuthenticated,
