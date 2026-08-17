@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { IntegrationController } from '../modules/integration/IntegrationController';
 import { OpenFinanceController } from '../modules/openfinance/OpenFinanceController';
 import { ensureAuthenticated } from '../shared/middlewares/ensureAuthenticated';
-import { checkLicensing } from '../shared/middlewares/checkLicensing';
+import { checkLicensing, requirePlan } from '../shared/middlewares/checkLicensing';
 
 const integrationRoutes = Router();
 const integrationController = new IntegrationController();
@@ -59,10 +59,25 @@ integrationRoutes.post(
   checkLicensing,
   (req, res) => integrationController.updateMarketPrices(req, res)
 );
+// ─── WHATSAPP INTEGRATION ───
+integrationRoutes.get(
+  '/whatsapp/status',
+  ensureAuthenticated,
+  checkLicensing,
+  (req, res) => integrationController.getWhatsAppStatus(req, res)
+);
+integrationRoutes.post(
+  '/whatsapp/link',
+  ensureAuthenticated,
+  checkLicensing,
+  requirePlan('pro_usuario'),
+  (req, res) => integrationController.linkWhatsApp(req, res)
+);
 integrationRoutes.post(
   '/whatsapp/daily-summary',
   ensureAuthenticated,
   checkLicensing,
+  requirePlan('pro_usuario'),
   (req, res) => integrationController.sendDailySummary(req, res)
 );
 integrationRoutes.patch(

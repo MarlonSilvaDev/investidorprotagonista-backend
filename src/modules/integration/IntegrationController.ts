@@ -3,12 +3,13 @@ import { supabase } from '../../config/supabase';
 import { WhatsAppService } from '../../core/utils/WhatsAppService';
 import { BrapiService } from '../../core/utils/BrapiService';
 import { BankIntegrationService } from '../../core/utils/BankIntegrationService';
+import { AudioTranscriptionService } from '../../core/utils/AudioTranscriptionService';
+import { FinancialNlpService } from '../../core/utils/FinancialNlpService';
 
 export class IntegrationController {
   // ─── PLUGGY (OPEN FINANCE) ───
   async getPluggyToken(request: Request, response: Response) {
     try {
-      // Compat: aponta para o mesmo fluxo do Open Finance (sem persistir extrato).
       const { id: userId } = request.user;
       const token = await BankIntegrationService.createConnectToken({
         clientUserId: userId,
@@ -23,12 +24,6 @@ export class IntegrationController {
     }
   }
 
-  /**
-   * LEGADO DESATIVADO (410 Gone).
-   * Open Finance agora é local-only no Flutter: use
-   * POST /integrations/open-finance/connect-token + GET .../snapshot.
-   * Este endpoint não deve mais gravar txs/investments no Supabase.
-   */
   async syncPluggyAccount(_request: Request, response: Response) {
     return response.status(410).json({
       message:
@@ -81,14 +76,110 @@ export class IntegrationController {
     }
   }
 
-  // ─── WHATSAPP ───
+  // ─── WHATSAPP STATUS & CONFIGURAÇÃO (FLUTTER APP) ───
+  async getWhatsAppStatus(request: Request, response: Response) {
+    const { id: userId } = request.user;
+
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('phone_number, name, notification_channel, notification_time, plan, user_type, subscription_status')
+        .eq('id', userId)
+        .single();
+
+      const isPaidPlan =
+        profile?.user_type === 'empresa' ||
+        (profile?.plan && profile.plan !== 'free' && profile.plan !== 'padrao');
+
+      const botPhoneNumber = process.env.WHATSAPP_BOT_NUMBER || '+5511999999999';
+
+      return response.json({
+        isPaidPlan,
+        isConnected: !!profile?.phone_number && isPaidPlan,
+        phoneNumber: profile?.phone_number || null,
+        botPhoneNumber,
+        notificationChannel: profile?.notification_channel || 'whatsapp',
+        notificationTime: profile?.notification_time || '09:00',
+        features: {
+          audioToTransaction: isPaidPlan,
+          onDemandSummary: isPaidPlan,
+          dailyReports: isPaidPlan && profile?.notification_channel === 'whatsapp',
+        },
+      });
+    } catch (error: any) {
+      return response.status(500).json({ message: error.message || 'Failed to get WhatsApp status' });
+    }
+  }
+
+  async linkWhatsApp(request: Request, response: Response) {
+    const { id: userId } = request.user;
+    const { phoneNumber } = request.body;
+
+    if (!phoneNumber) {
+      return response.status(400).json({ message: 'Informe o número de telefone' });
+    }
+
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id, name, plan, user_type')
+        .eq('id', userId)
+        .single();
+
+      const isPaidPlan =
+        profile?.user_type === 'empresa' ||
+        (profile?.plan && profile.plan !== 'free' && profile.plan !== 'padrao');
+
+      if (!isPaidPlan) {
+        return response.status(403).json({
+          code: 'PAID_PLAN_REQUIRED',
+          message:
+            'O Bot Inteligente do WhatsApp é exclusivo para assinantes dos planos Pro ou Empresa. Atualize seu plano para concluir a integração.',
+        });
+      }
+
+      const cleanPhone = phoneNumber.replace(/\D/g, '');
+      const formatted = cleanPhone.startsWith('+') ? cleanPhone : `+${cleanPhone}`;
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .update({
+          phone_number: formatted,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', userId)
+        .select()
+        .single();
+
+      if (error) return response.status(400).json({ message: error.message });
+
+      // Envia mensagem de boas-vindas no WhatsApp
+      const welcomeMsg =
+        `👋 *Olá ${data.name || 'Investidor'}!*\n\n` +
+        `Seu WhatsApp foi vinculado com sucesso ao *Investidor Protagonista*! 🚀\n\n` +
+        `🎙️ *Envie um áudio* ou digite seus gastos para registrar transações na hora.\n` +
+        `_Exemplo: "Gastei 45 reais no almoço"_ ou _"Recebi pix de 200 reais"_.\n\n` +
+        `📊 Digite *resumo* a qualquer momento para ver seus gastos!`;
+
+      await WhatsAppService.sendMessage(formatted, welcomeMsg);
+
+      return response.json({
+        success: true,
+        phoneNumber: formatted,
+        message: 'WhatsApp vinculado com sucesso!',
+      });
+    } catch (error: any) {
+      return response.status(500).json({ message: error.message || 'Falha ao vincular WhatsApp' });
+    }
+  }
+
   async sendDailySummary(request: Request, response: Response) {
     const { id: userId } = request.user;
 
     try {
       const { data: profile } = await supabase
         .from('profiles')
-        .select('phone_number, name')
+        .select('phone_number, name, plan, user_type')
         .eq('id', userId)
         .single();
 
@@ -96,40 +187,25 @@ export class IntegrationController {
         return response.status(400).json({ message: 'User has no phone number configured' });
       }
 
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      const isPaidPlan =
+        profile?.user_type === 'empresa' ||
+        (profile?.plan && profile.plan !== 'free' && profile.plan !== 'padrao');
 
-      const { data: transactions } = await supabase
-        .from('transactions')
-        .select('amount, type')
-        .eq('user_id', userId)
-        .gte('date', today.toISOString());
+      if (!isPaidPlan) {
+        return response.status(403).json({
+          code: 'PAID_PLAN_REQUIRED',
+          message: 'Atualize seu plano para enviar resumos diários no WhatsApp.',
+        });
+      }
 
-      const income = transactions?.filter((t: any) => t.type === 'income').reduce((acc: number, t: any) => acc + t.amount, 0) || 0;
-      const expense = transactions?.filter((t: any) => t.type === 'expense').reduce((acc: number, t: any) => acc + t.amount, 0) || 0;
-
-      const { data: investments } = await supabase
-        .from('investments')
-        .select('current_total')
-        .eq('user_id', userId);
-
-      const totalInvested = investments?.reduce((acc: number, i: any) => acc + (i.current_total || 0), 0) || 0;
-
-      const message =
-        `📋 *Resumo diário — ${profile.name || 'Investidor'}*\n\n` +
-        `Entradas hoje: R$ ${income.toFixed(2)}\n` +
-        `Saídas hoje: R$ ${expense.toFixed(2)}\n` +
-        `Saldo do dia: R$ ${(income - expense).toFixed(2)}\n` +
-        `Carteira: R$ ${totalInvested.toFixed(2)}`;
-
-      await WhatsAppService.sendMessage(profile.phone_number, message);
+      const summaryText = await this.generateFinancialSummary(userId, profile.name, 'today');
+      await WhatsAppService.sendMessage(profile.phone_number, summaryText);
       return response.json({ message: 'Daily summary sent' });
     } catch (error: any) {
       return response.status(500).json({ message: error.message || 'Failed to send daily summary' });
     }
   }
 
-  // ─── CONFIGURAÇÕES DE NOTIFICAÇÃO ───
   async updateNotificationPrefs(request: Request, response: Response) {
     const { id: userId } = request.user;
     const { channel, time } = request.body;
@@ -139,7 +215,7 @@ export class IntegrationController {
       .update({
         notification_channel: channel,
         notification_time: time,
-        updated_at: new Date()
+        updated_at: new Date(),
       })
       .eq('id', userId)
       .select()
@@ -149,88 +225,220 @@ export class IntegrationController {
     return response.json(data);
   }
 
-  // ─── WHATSAPP CHATBOT (FLUXO INTERATIVO) ───
+  // ─── WHATSAPP CHATBOT & WEBHOOK INTELIGENTE (ÁUDIO + TEXTO) ───
   async whatsappWebhook(request: Request, response: Response) {
-    const { message, sender } = request.body;
-    const text = message.trim().toLowerCase();
+    const { message, sender, media_url, audio_url, audio_base64, mime_type } = request.body;
 
-    // 1. Identificar usuário e estado da sessão
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('id, whatsapp_session_state, name')
-      .eq('phone_number', sender)
-      .single();
-
-    if (!profile) return response.json({ status: 'ignored' });
-
-    let nextState = 'idle';
-    let reply = '';
-
-    // 2. Máquina de Estados do Chatbot
-    switch (profile.whatsapp_session_state) {
-      case 'idle':
-        if (text === 'usar whatsapp' || text === 'oi' || text === 'menu') {
-          reply = `Olá ${profile.name}! Como posso ajudar hoje?\n\n1 - Registrar Entrada\n2 - Registrar Saída\n3 - Resumo da Carteira`;
-          nextState = 'waiting_type';
-        } else {
-          reply = "Desculpe, não entendi. Digite 'menu' para ver as opções.";
-        }
-        break;
-
-      case 'waiting_type':
-        if (text === '1' || text === '2') {
-          const type = text === '1' ? 'Entrada' : 'Saída';
-          reply = `Ótimo! Qual o valor da ${type}? (Ex: 50.00)`;
-          nextState = `waiting_amount_${text === '1' ? 'income' : 'expense'}`;
-        } else if (text === '3') {
-          reply = 'Buscando dados da sua carteira...';
-          nextState = 'idle';
-        } else {
-          reply = 'Opção inválida. Escolha 1, 2 ou 3.';
-          nextState = 'waiting_type';
-        }
-        break;
-
-      case 'waiting_amount_income':
-      case 'waiting_amount_expense': {
-        const amount = parseFloat(text.replace(',', '.'));
-        if (!isNaN(amount)) {
-          const type = profile.whatsapp_session_state.includes('income') ? 'income' : 'expense';
-          reply = `Valor de R$ ${amount.toFixed(2)} recebido. Qual a categoria/descrição?`;
-          nextState = `waiting_description_${type}_${amount}`;
-        } else {
-          reply = 'Valor inválido. Digite um número (Ex: 50.00)';
-          nextState = profile.whatsapp_session_state;
-        }
-        break;
-      }
-
-      default:
-        if (profile.whatsapp_session_state?.startsWith('waiting_description')) {
-          const parts = profile.whatsapp_session_state.split('_');
-          const finalType = parts[2];
-          const finalAmount = parseFloat(parts[3] || '0');
-
-          await supabase.from('transactions').insert([{
-            user_id: profile.id,
-            title: text,
-            amount: finalAmount,
-            type: finalType,
-            category: 'WhatsApp',
-            date: new Date(),
-            description: 'Registrado via Chatbot WhatsApp'
-          }]);
-
-          reply = `✅ *Sucesso!* ${finalType === 'income' ? 'Entrada' : 'Saída'} de R$ ${finalAmount.toFixed(2)} registrada como "${text}".`;
-          nextState = 'idle';
-        }
-        break;
+    if (!sender) {
+      return response.status(400).json({ message: 'Remetente não informado' });
     }
 
-    // 3. Atualizar estado e responder
-    await supabase.from('profiles').update({ whatsapp_session_state: nextState }).eq('id', profile.id);
-    await WhatsAppService.sendMessage(sender, reply);
+    const cleanSender = sender.replace(/\D/g, '');
+    const formattedSender = cleanSender.startsWith('+') ? cleanSender : `+${cleanSender}`;
 
-    return response.json({ status: 'processed' });
+    // 1. Identificar usuário cadastrado pelo número
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id, name, phone_number, plan, user_type, subscription_status')
+      .or(`phone_number.eq.${formattedSender},phone_number.eq.${cleanSender}`)
+      .single();
+
+    if (!profile) {
+      const notRegisteredMsg =
+        `👋 Olá! Este número ainda não está vinculado ao *Investidor Protagonista*.\n\n` +
+        `Para vincular sua conta, acesse o app no menu *Integrações > WhatsApp* e insira este número.`;
+      await WhatsAppService.sendMessage(formattedSender, notRegisteredMsg);
+      return response.json({ status: 'unregistered_user' });
+    }
+
+    // 2. Validar se o plano do usuário é Pro/Empresa
+    const isPaidPlan =
+      profile.user_type === 'empresa' ||
+      (profile.plan && profile.plan !== 'free' && profile.plan !== 'padrao');
+
+    if (!isPaidPlan) {
+      const upgradeMsg =
+        `🔒 *Recurso Exclusivo dos Planos Pro / Empresa*\n\n` +
+        `Olá ${profile.name || 'Investidor'}! O Bot Inteligente do WhatsApp com transcrição de voz e relatórios é exclusivo para assinantes.\n\n` +
+        `Acesse o aplicativo *Investidor Protagonista* e atualize seu plano para concluir a integração e liberar o lançamento de transações por voz! 🚀`;
+      await WhatsAppService.sendMessage(formattedSender, upgradeMsg);
+      return response.json({ status: 'upgrade_required' });
+    }
+
+    let processedText = (message || '').trim();
+
+    // 2. Se for mensagem de áudio, processa a transcrição via IA
+    const targetAudioUrl = audio_url || (mime_type?.startsWith('audio') ? media_url : undefined);
+    if (targetAudioUrl || audio_base64) {
+      const transcribed = await AudioTranscriptionService.transcribeAudio({
+        audioUrl: targetAudioUrl,
+        audioBase64: audio_base64,
+        mimeType: mime_type,
+      });
+
+      if (transcribed && transcribed.length > 0) {
+        processedText = transcribed;
+      } else {
+        await WhatsAppService.sendMessage(
+          formattedSender,
+          '🎙️ Recebi seu áudio, mas não consegui compreender com clareza. Pode digitar ou gravar novamente informando o valor e o gasto?',
+        );
+        return response.json({ status: 'transcription_failed' });
+      }
+    }
+
+    if (!processedText) {
+      return response.json({ status: 'empty_message' });
+    }
+
+    // 3. Processa a intenção via IA / NLP
+    const intent = FinancialNlpService.parseIntent(processedText);
+
+    switch (intent.kind) {
+      case 'transaction': {
+        const tx = intent.data;
+        const now = new Date();
+
+        const { error } = await supabase.from('transactions').insert([
+          {
+            user_id: profile.id,
+            title: tx.title,
+            amount: tx.amount,
+            type: tx.type,
+            category: tx.category,
+            date: tx.date ? tx.date.toISOString() : now.toISOString(),
+            description: `${tx.description} (Original: "${processedText}")`,
+            data_origin: 'whatsapp',
+            is_synced: true,
+          },
+        ]);
+
+        if (error) {
+          console.error('[WhatsAppBot] Erro ao salvar transação:', error);
+          await WhatsAppService.sendMessage(
+            formattedSender,
+            '❌ Ocorreu um erro ao registrar sua transação. Tente novamente em instantes.',
+          );
+          return response.status(500).json({ error: error.message });
+        }
+
+        const isIncome = tx.type === 'income';
+        const confirmationMsg =
+          `✅ *Transação Registrada com Sucesso!*\n\n` +
+          `🏷️ *Item:* ${tx.title}\n` +
+          `💵 *Valor:* R$ ${tx.amount.toFixed(2)} (${isIncome ? 'Receita 📈' : 'Despesa 📉'})\n` +
+          `📁 *Categoria:* ${tx.category}\n` +
+          `📅 *Data:* ${now.toLocaleDateString('pt-BR')}\n\n` +
+          `_Registrado no Investidor Protagonista via ${targetAudioUrl || audio_base64 ? 'Áudio' : 'WhatsApp'}._`;
+
+        await WhatsAppService.sendMessage(formattedSender, confirmationMsg);
+        return response.json({ status: 'transaction_saved', transaction: tx });
+      }
+
+      case 'summary': {
+        const summaryMsg = await this.generateFinancialSummary(
+          profile.id,
+          profile.name,
+          intent.data.period,
+          intent.data.categoryFilter,
+        );
+        await WhatsAppService.sendMessage(formattedSender, summaryMsg);
+        return response.json({ status: 'summary_sent' });
+      }
+
+      case 'help': {
+        const helpMsg =
+          `🤖 *Assistente Financeiro Investidor Protagonista*\n\n` +
+          `Você pode falar comigo por *áudio* 🎙️ ou *texto* 💬:\n\n` +
+          `📌 *Como lançar gastos e receitas:*\n` +
+          `• _"Gastei 54 reais no almoço"_\n` +
+          `• _"Paguei 120 de luz"_\n` +
+          `• _"Recebi pix de 350 reais de freela"_\n` +
+          `• _"Uber 23 reais"_\n\n` +
+          `📊 *Como pedir resumos:*\n` +
+          `• Digite *resumo* (resumo do mês)\n` +
+          `• Digite *quanto gastei hoje*\n` +
+          `• Digite *gastos da semana*\n` +
+          `• Digite *gastos com alimentação*`;
+
+        await WhatsAppService.sendMessage(formattedSender, helpMsg);
+        return response.json({ status: 'help_sent' });
+      }
+
+      case 'unknown':
+      default: {
+        const unknownReply =
+          `🤔 Não consegui identificar um valor ou comando na mensagem: _"${processedText}"_\n\n` +
+          `💡 *Dica:* Para registrar um gasto, mencione o valor e o que foi comprado. Exemplo:\n` +
+          `• _"Gastei 40 reais na padaria"_ (ou envie um áudio falando isso!)`;
+
+        await WhatsAppService.sendMessage(formattedSender, unknownReply);
+        return response.json({ status: 'unknown_intent' });
+      }
+    }
+  }
+
+  /**
+   * Helper para gerar resumo financeiro consolidado.
+   */
+  private async generateFinancialSummary(
+    userId: string,
+    userName: string | null,
+    period: 'today' | 'week' | 'month' | 'last_month' | 'category',
+    categoryFilter?: string,
+  ): Promise<string> {
+    const startDate = new Date();
+
+    if (period === 'today') {
+      startDate.setHours(0, 0, 0, 0);
+    } else if (period === 'week') {
+      startDate.setDate(startDate.getDate() - 7);
+    } else if (period === 'last_month') {
+      startDate.setMonth(startDate.getMonth() - 1);
+      startDate.setDate(1);
+    } else {
+      // Month
+      startDate.setDate(1);
+      startDate.setHours(0, 0, 0, 0);
+    }
+
+    const { data: allTxs } = await supabase
+      .from('transactions')
+      .select('title, amount, type, category, date')
+      .eq('user_id', userId)
+      .gte('date', startDate.toISOString());
+
+    const txs = categoryFilter
+      ? allTxs?.filter((t: any) =>
+          (t.category || '').toLowerCase().includes(categoryFilter.toLowerCase()),
+        )
+      : allTxs;
+
+    const income =
+      txs?.filter((t: any) => t.type === 'income').reduce((acc: number, t: any) => acc + Number(t.amount), 0) || 0;
+    const expense =
+      txs?.filter((t: any) => t.type === 'expense').reduce((acc: number, t: any) => acc + Number(t.amount), 0) || 0;
+    const balance = income - expense;
+
+    const periodLabel =
+      period === 'today'
+        ? 'de Hoje'
+        : period === 'week'
+          ? 'dos Últimos 7 Dias'
+          : period === 'last_month'
+            ? 'do Mês Passado'
+            : categoryFilter
+              ? `na Categoria ${categoryFilter}`
+              : 'deste Mês';
+
+    return (
+      `📊 *Resumo Financeiro ${periodLabel}*\n` +
+      `👤 *${userName || 'Investidor'}*\n\n` +
+      `🟢 *Entradas:* R$ ${income.toFixed(2)}\n` +
+      `🔴 *Saídas:* R$ ${expense.toFixed(2)}\n` +
+      `💰 *Saldo:* R$ ${balance.toFixed(2)}\n` +
+      `📝 *Total de Lançamentos:* ${txs?.length || 0}\n\n` +
+      `_Acompanhe seus gráficos completos no aplicativo!_`
+    );
   }
 }

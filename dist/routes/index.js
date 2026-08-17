@@ -19,6 +19,7 @@ const category_routes_1 = require("./category.routes");
 const shared_routes_1 = require("./shared.routes");
 const admin_routes_1 = require("./admin.routes");
 const site_routes_1 = require("./site.routes");
+const report_routes_1 = require("./report.routes");
 const ensureAuthenticated_1 = require("../shared/middlewares/ensureAuthenticated");
 const ensureAdmin_1 = require("../shared/middlewares/ensureAdmin");
 const checkLicensing_1 = require("../shared/middlewares/checkLicensing");
@@ -54,4 +55,5 @@ routes.use('/cards', ensureAuthenticated_1.ensureAuthenticated, checkLicensing_1
 routes.use('/subscriptions', ensureAuthenticated_1.ensureAuthenticated, checkLicensing_1.checkLicensing, subscription_routes_1.subscriptionRoutes);
 routes.use('/categories', ensureAuthenticated_1.ensureAuthenticated, checkLicensing_1.checkLicensing, category_routes_1.categoryRoutes);
 routes.use('/shared', ensureAuthenticated_1.ensureAuthenticated, checkLicensing_1.checkLicensing, shared_routes_1.sharedRoutes);
+routes.use('/reports', ensureAuthenticated_1.ensureAuthenticated, checkLicensing_1.checkLicensing, (0, checkLicensing_1.requirePlan)('pro_usuario'), report_routes_1.reportRoutes);
 //# sourceMappingURL=index.js.map

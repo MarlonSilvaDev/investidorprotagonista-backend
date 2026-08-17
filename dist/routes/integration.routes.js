@@ -21,7 +21,10 @@ integrationRoutes.delete('/open-finance/items/:itemId', ensureAuthenticated_1.en
 integrationRoutes.get('/pluggy/token', ensureAuthenticated_1.ensureAuthenticated, checkLicensing_1.checkLicensing, (req, res) => integrationController.getPluggyToken(req, res));
 integrationRoutes.post('/pluggy/sync', ensureAuthenticated_1.ensureAuthenticated, checkLicensing_1.checkLicensing, (req, res) => integrationController.syncPluggyAccount(req, res));
 integrationRoutes.post('/b3/update-prices', ensureAuthenticated_1.ensureAuthenticated, checkLicensing_1.checkLicensing, (req, res) => integrationController.updateMarketPrices(req, res));
-integrationRoutes.post('/whatsapp/daily-summary', ensureAuthenticated_1.ensureAuthenticated, checkLicensing_1.checkLicensing, (req, res) => integrationController.sendDailySummary(req, res));
+// ─── WHATSAPP INTEGRATION ───
+integrationRoutes.get('/whatsapp/status', ensureAuthenticated_1.ensureAuthenticated, checkLicensing_1.checkLicensing, (req, res) => integrationController.getWhatsAppStatus(req, res));
+integrationRoutes.post('/whatsapp/link', ensureAuthenticated_1.ensureAuthenticated, checkLicensing_1.checkLicensing, (0, checkLicensing_1.requirePlan)('pro_usuario'), (req, res) => integrationController.linkWhatsApp(req, res));
+integrationRoutes.post('/whatsapp/daily-summary', ensureAuthenticated_1.ensureAuthenticated, checkLicensing_1.checkLicensing, (0, checkLicensing_1.requirePlan)('pro_usuario'), (req, res) => integrationController.sendDailySummary(req, res));
 integrationRoutes.patch('/notifications/preferences', ensureAuthenticated_1.ensureAuthenticated, checkLicensing_1.checkLicensing, (req, res) => integrationController.updateNotificationPrefs(req, res));
 // Webhooks (Públicos - Validados por Provedor)
 integrationRoutes.post('/webhook/whatsapp', (req, res) => integrationController.whatsappWebhook(req, res));

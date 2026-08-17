@@ -16,9 +16,10 @@ import { categoryRoutes } from './category.routes';
 import { sharedRoutes } from './shared.routes';
 import { adminRoutes } from './admin.routes';
 import { siteRoutes } from './site.routes';
+import { reportRoutes } from './report.routes';
 import { ensureAuthenticated } from '../shared/middlewares/ensureAuthenticated';
 import { ensureAdmin } from '../shared/middlewares/ensureAdmin';
-import { checkLicensing } from '../shared/middlewares/checkLicensing';
+import { checkLicensing, requirePlan } from '../shared/middlewares/checkLicensing';
 import { rateLimiter } from '../shared/middlewares/rateLimiter';
 
 const routes = Router();
@@ -60,5 +61,6 @@ routes.use('/cards', ensureAuthenticated, checkLicensing, cardRoutes);
 routes.use('/subscriptions', ensureAuthenticated, checkLicensing, subscriptionRoutes);
 routes.use('/categories', ensureAuthenticated, checkLicensing, categoryRoutes);
 routes.use('/shared', ensureAuthenticated, checkLicensing, sharedRoutes);
+routes.use('/reports', ensureAuthenticated, checkLicensing, requirePlan('pro_usuario'), reportRoutes);
 
 export { routes };

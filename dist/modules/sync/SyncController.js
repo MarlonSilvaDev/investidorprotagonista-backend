@@ -177,23 +177,20 @@ class SyncController {
         if (!Array.isArray(operations)) {
             return response.status(400).json({ message: 'operations must be an array' });
         }
-        const results = [];
-        for (const operation of operations) {
+        // Processa operações em paralelo de forma não-bloqueante no event loop
+        const results = await Promise.all(operations.map(async (operation) => {
             const { entity, op, client_id: clientId, payload = {} } = operation;
             if (!entity || !op || !clientId || !TABLE_BY_ENTITY[entity]) {
-                results.push({
+                return {
                     client_id: clientId ?? null,
                     entity: entity ?? null,
                     status: 'error',
                     message: 'Invalid operation',
-                });
-                continue;
+                };
             }
             const table = TABLE_BY_ENTITY[entity];
             try {
                 if (op === 'delete') {
-                    // SOFT DELETE: usa deleted_at ao invés de DELETE físico
-                    // Conforme a arquitetura de escalabilidade
                     const { error } = await supabase_1.supabase
                         .from(table)
                         .update({
@@ -202,32 +199,28 @@ class SyncController {
                     })
                         .match({ id: clientId, user_id: userId });
                     if (error) {
-                        results.push({
+                        return {
                             client_id: clientId,
                             entity,
                             status: 'error',
                             message: error.message,
-                        });
-                        continue;
+                        };
                     }
-                    results.push({
+                    return {
                         client_id: clientId,
                         server_id: clientId,
                         entity,
                         status: 'applied',
-                    });
-                    continue;
+                    };
                 }
-                // Defensivo: não persistir payload marcado como Open Finance.
                 const origin = String(payload.dataOrigin ?? payload.data_origin ?? 'manual').toLowerCase();
                 if (origin === 'openfinance' || origin === 'open_finance') {
-                    results.push({
+                    return {
                         client_id: clientId,
                         entity,
                         status: 'ignored',
                         message: 'Open Finance data is local-only',
-                    });
-                    continue;
+                    };
                 }
                 const row = mapRow(entity, userId, clientId, payload);
                 const { data, error } = await supabase_1.supabase
@@ -236,31 +229,30 @@ class SyncController {
                     .select()
                     .single();
                 if (error) {
-                    results.push({
+                    return {
                         client_id: clientId,
                         entity,
                         status: 'error',
                         message: error.message,
-                    });
-                    continue;
+                    };
                 }
-                results.push({
+                return {
                     client_id: clientId,
                     server_id: data.id,
                     entity,
                     status: 'applied',
                     server_updated_at: data.updated_at ?? null,
-                });
+                };
             }
             catch (error) {
-                results.push({
+                return {
                     client_id: clientId,
                     entity,
                     status: 'error',
                     message: error instanceof Error ? error.message : 'Unknown error',
-                });
+                };
             }
-        }
+        }));
         return response.json({ results });
     }
     async pull(request, response) {
@@ -279,49 +271,61 @@ class SyncController {
             'subscription',
             'investment',
         ];
-        const changes = {};
-        for (const entity of entities) {
-            const table = TABLE_BY_ENTITY[entity];
-            let query = supabase_1.supabase
-                .from(table)
-                .select('*')
-                .eq('user_id', userId);
-            // Filtra apenas registros ativos (deleted_at IS NULL)
-            query = query.is('deleted_at', null);
-            if (since) {
-                query = query.gt('updated_at', since.toISOString());
+        try {
+            // Executa todas as consultas de changes e deletions em paralelo
+            const [changesList, deletionsList] = await Promise.all([
+                Promise.all(entities.map(async (entity) => {
+                    const table = TABLE_BY_ENTITY[entity];
+                    let query = supabase_1.supabase
+                        .from(table)
+                        .select('*')
+                        .eq('user_id', userId)
+                        .is('deleted_at', null);
+                    if (since) {
+                        query = query.gt('updated_at', since.toISOString());
+                    }
+                    const { data, error } = await query;
+                    if (error) {
+                        throw new Error(`[${entity}] ${error.message}`);
+                    }
+                    const rows = (data ?? []).filter((row) => !isLegacyOpenFinanceRow(entity, row));
+                    return { table, rows };
+                })),
+                Promise.all(entities.map(async (entity) => {
+                    const table = TABLE_BY_ENTITY[entity];
+                    let query = supabase_1.supabase
+                        .from(table)
+                        .select('id')
+                        .eq('user_id', userId)
+                        .not('deleted_at', 'is', null);
+                    if (since) {
+                        query = query.gt('updated_at', since.toISOString());
+                    }
+                    const { data } = await query;
+                    return { table, rows: data ?? [] };
+                })),
+            ]);
+            const changes = {};
+            for (const item of changesList) {
+                changes[item.table] = item.rows;
             }
-            const { data, error } = await query;
-            if (error) {
-                return response.status(400).json({ message: error.message, entity });
+            const deletions = {};
+            for (const item of deletionsList) {
+                if (item.rows.length > 0) {
+                    deletions[item.table] = item.rows;
+                }
             }
-            // Exclui lixo legado do antigo pluggy/sync (OF não deve entrar no pull).
-            const rows = (data ?? []).filter((row) => !isLegacyOpenFinanceRow(entity, row));
-            // Usa plural do TABLE_BY_ENTITY (category → categories, não categorys).
-            changes[TABLE_BY_ENTITY[entity]] = rows;
+            return response.json({
+                server_time: new Date().toISOString(),
+                changes,
+                deletions: Object.keys(deletions).length > 0 ? deletions : undefined,
+            });
         }
-        // Retorna também as exclusões (deleted_at != NULL) para o app remover do Drift
-        const deletions = {};
-        for (const entity of entities) {
-            const table = TABLE_BY_ENTITY[entity];
-            let query = supabase_1.supabase
-                .from(table)
-                .select('id')
-                .eq('user_id', userId)
-                .not('deleted_at', 'is', null);
-            if (since) {
-                query = query.gt('updated_at', since.toISOString());
-            }
-            const { data } = await query;
-            if (data && data.length > 0) {
-                deletions[TABLE_BY_ENTITY[entity]] = data;
-            }
+        catch (error) {
+            return response.status(400).json({
+                message: error instanceof Error ? error.message : 'Pull failed',
+            });
         }
-        return response.json({
-            server_time: new Date().toISOString(),
-            changes,
-            deletions: Object.keys(deletions).length > 0 ? deletions : undefined,
-        });
     }
 }
 exports.SyncController = SyncController;

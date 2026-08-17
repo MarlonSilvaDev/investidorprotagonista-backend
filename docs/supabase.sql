@@ -396,6 +396,8 @@ create table public.tasks (
   due_date timestamp with time zone null,
   priority text not null default 'medium'::text,
   is_completed boolean not null default false,
+  progress numeric(5, 2) not null default 0,
+  subtasks jsonb not null default '[]'::jsonb,
   linked_transaction_id uuid null,
   completed_at timestamp with time zone null,
   created_at timestamp with time zone not null default now(),
@@ -408,8 +410,14 @@ create table public.tasks (
     (
       priority = any (array['low'::text, 'medium'::text, 'high'::text])
     )
+  ),
+  constraint tasks_progress_check check (
+    (
+      progress >= 0 and progress <= 100
+    )
   )
 ) TABLESPACE pg_default;
 
 create index IF not exists idx_tasks_user_id on public.tasks using btree (user_id) TABLESPACE pg_default;
 create index IF not exists idx_tasks_deleted_at on public.tasks using btree (deleted_at) TABLESPACE pg_default;
+create index IF not exists idx_tasks_subtasks on public.tasks using gin (subtasks) TABLESPACE pg_default;
